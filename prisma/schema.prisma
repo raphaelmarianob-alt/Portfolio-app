@@ -1,0 +1,56 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model ResearchBase {
+  id              Int      @id @default(autoincrement())
+  ticker          String   @unique
+  nome_empresa    String
+  setor           String
+  roe             Float?
+  p_vpa           Float?
+  p_l             Float?
+  ev_ebitda       Float?
+  div_yield       Float?
+  pct_max_carteira Float
+  preco_teto      Float?
+  classificacao   String   // dividendos, growth, value, small_cap, quality
+  recomendacao    String   // comprar, manter, neutro, sair
+  analise_texto   String   @default("")
+  updated_at      DateTime @updatedAt
+
+  @@map("research_base")
+}
+
+model Relatorio {
+  id           Int              @id @default(autoincrement())
+  nome_cliente String
+  data         DateTime         @default(now())
+  objetivo     String
+  pct_pl_acoes Float
+  valor_total  Float            @default(0)
+  status       String           @default("rascunho") // rascunho, finalizado
+  created_at   DateTime         @default(now())
+  ativos       RelatorioAtivo[]
+
+  @@map("relatorios")
+}
+
+model RelatorioAtivo {
+  id            Int       @id @default(autoincrement())
+  relatorio_id  Int
+  ticker        String
+  tipo          String    // atual, sugerido
+  valor_rs      Float
+  peso          Float
+  movimentacao  String?   // manter, aumentar, reduzir, sair, entrar
+
+  relatorio     Relatorio @relation(fields: [relatorio_id], references: [id], onDelete: Cascade)
+
+  @@map("relatorio_ativos")
+}
