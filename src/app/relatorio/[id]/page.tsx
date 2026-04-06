@@ -142,8 +142,8 @@ export default function RelatorioPage({ params }: { params: Promise<{ id: string
   const totalAtual = ativosAtuais.reduce((s, a) => s + a.valor_rs, 0);
   const totalSugerido = ativosSugeridos.reduce((s, a) => s + a.valor_rs, 0);
 
-  const handleExportPDF = () => {
-    exportRelatorioPDF(relatorio, ativosAtuais, ativosSugeridos, researchMap);
+  const handleExportPDF = async () => {
+    await exportRelatorioPDF(relatorio, ativosAtuais, ativosSugeridos, researchMap);
   };
 
   const renderTable = (ativos: AtivoRelatorio[], total: number) => (

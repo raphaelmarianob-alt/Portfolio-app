@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 
 const links = [
@@ -40,14 +41,7 @@ export function Sidebar() {
     <aside className="fixed left-0 top-0 bottom-0 w-[250px] bg-[#0d0e14] border-r border-[#1e2030] flex flex-col z-10">
       {/* Logo */}
       <div className="h-16 flex items-center px-6 border-b border-[#1e2030]">
-        <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center mr-3">
-          <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18 9 11.25l4.306 4.306a11.95 11.95 0 0 1 5.814-5.518l2.74-1.22m0 0-5.94-2.281m5.94 2.28-2.28 5.941" />
-          </svg>
-        </div>
-        <span className="text-white font-bold text-lg">
-          Portfolio Manager
-        </span>
+        <Image src="/logo.png" alt="Nord Wealth" width={160} height={40} className="h-10 w-auto" priority />
       </div>
 
       {/* Navigation */}

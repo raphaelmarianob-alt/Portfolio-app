@@ -41,6 +41,21 @@ const fmt = (v: number | null | undefined) =>
 const fmtCurrency = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
+async function loadLogoBase64(): Promise<string | null> {
+  try {
+    const res = await fetch("/logo.png");
+    const blob = await res.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
 const MOV_COLORS: Record<string, [number, number, number]> = {
   sair: [254, 202, 202],       // red-200
   reduzir: [254, 215, 170],    // orange-200
@@ -57,7 +72,7 @@ const MOV_HEADER_COLORS: Record<string, [number, number, number]> = {
   entrar: [22, 163, 74],
 };
 
-export function exportRelatorioPDF(
+export async function exportRelatorioPDF(
   relatorio: RelatorioData,
   ativosAtuais: AtivoRelatorio[],
   ativosSugeridos: AtivoRelatorio[],
@@ -69,6 +84,8 @@ export function exportRelatorioPDF(
   const contentWidth = pageWidth - margin * 2;
   let y = margin;
 
+  const logoBase64 = await loadLogoBase64();
+
   const addPageNumber = () => {
     const pageCount = (doc as unknown as { internal: { getNumberOfPages: () => number } }).internal.getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
@@ -79,10 +96,20 @@ export function exportRelatorioPDF(
     }
   };
 
+  const addSubsequentPageHeader = () => {
+    if (logoBase64) {
+      doc.addImage(logoBase64, "PNG", pageWidth - margin - 30, 5, 30, 12, undefined, "FAST");
+    }
+    doc.setDrawColor(200);
+    doc.setLineWidth(0.3);
+    doc.line(margin, 19, pageWidth - margin, 19);
+  };
+
   const checkPageBreak = (needed: number) => {
     if (y + needed > 270) {
       doc.addPage();
-      y = margin;
+      addSubsequentPageHeader();
+      y = 24;
     }
   };
 
@@ -99,7 +126,7 @@ export function exportRelatorioPDF(
     y += 5;
   };
 
-  // ========== HEADER ==========
+  // ========== HEADER (first page) ==========
   doc.setFillColor(26, 35, 50);
   doc.rect(0, 0, pageWidth, 28, "F");
 
@@ -116,12 +143,10 @@ export function exportRelatorioPDF(
     22
   );
 
-  // Logo placeholder
-  doc.setDrawColor(255);
-  doc.setLineWidth(0.5);
-  doc.roundedRect(pageWidth - margin - 25, 5, 25, 18, 2, 2, "S");
-  doc.setFontSize(7);
-  doc.text("LOGO", pageWidth - margin - 12.5, 15, { align: "center" });
+  // Logo on first page (top right)
+  if (logoBase64) {
+    doc.addImage(logoBase64, "PNG", pageWidth - margin - 30, 4, 30, 20, undefined, "FAST");
+  }
 
   y = 36;
 
@@ -143,7 +168,7 @@ export function exportRelatorioPDF(
 
   autoTable(doc, {
     startY: y,
-    margin: { left: margin, right: margin },
+    margin: { left: margin, right: margin, top: 24 },
     head: [["#", "Ticker", "Empresa", "Setor", "Valor R$", "Peso %", "ROE", "P/VPA", "P/L", "EV/EBITDA", "DY", "Mov."]],
     body: [
       ...ativosAtuais.map((a, i) => {
@@ -199,6 +224,9 @@ export function exportRelatorioPDF(
           data.cell.styles.fillColor = color;
         }
       }
+    },
+    didDrawPage: (data) => {
+      if (data.pageNumber > 1) addSubsequentPageHeader();
     },
   });
 
@@ -328,7 +356,7 @@ export function exportRelatorioPDF(
 
   autoTable(doc, {
     startY: y,
-    margin: { left: margin, right: margin },
+    margin: { left: margin, right: margin, top: 24 },
     head: [["#", "Ticker", "Empresa", "Setor", "Valor R$", "Peso %", "ROE", "P/VPA", "P/L", "EV/EBITDA", "DY", "Mov."]],
     body: [
       ...ativosSugeridos.map((a, i) => {
@@ -384,6 +412,9 @@ export function exportRelatorioPDF(
           data.cell.styles.fillColor = color;
         }
       }
+    },
+    didDrawPage: (data) => {
+      if (data.pageNumber > 1) addSubsequentPageHeader();
     },
   });
 
