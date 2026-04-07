@@ -64,16 +64,17 @@ type RGB = [number, number, number];
 const C_TEXT: RGB = [26, 26, 26];         // #1a1a1a
 const C_DATE: RGB = [85, 85, 85];         // #555555
 const C_BORDER: RGB = [204, 204, 204];    // #cccccc
-const C_HEAD_BG: RGB = [240, 240, 240];   // #f0f0f0
-const C_ALT_ROW: RGB = [250, 250, 250];   // #fafafa
+const C_NAVY: RGB = [13, 27, 42];         // #0d1b2a
+const C_ALT_ROW: RGB = [248, 249, 250];   // #f8f9fa
 const C_FOOTER: RGB = [136, 136, 136];    // #888888
+const C_HEADER_DATE: RGB = [160, 174, 192]; // #a0aec0
 
 const MOV_BADGE: Record<string, { bg: RGB; text: RGB; border: RGB }> = {
-  sair:     { bg: [254, 226, 226], text: [220, 38, 38],  border: [220, 38, 38] },   // #fee2e2 / #dc2626
-  reduzir:  { bg: [255, 237, 213], text: [234, 88, 12],  border: [234, 88, 12] },   // #ffedd5 / #ea580c
-  manter:   { bg: [243, 244, 246], text: [107, 114, 128], border: [107, 114, 128] }, // #f3f4f6 / #6b7280
-  aumentar: { bg: [220, 252, 231], text: [22, 163, 74],  border: [22, 163, 74] },   // #dcfce7 / #16a34a
-  entrar:   { bg: [219, 234, 254], text: [37, 99, 235],  border: [37, 99, 235] },   // #dbeafe / #2563eb
+  sair:     { bg: [248, 215, 218], text: [114, 28, 36],  border: [114, 28, 36] },   // #f8d7da / #721c24
+  reduzir:  { bg: [255, 243, 205], text: [133, 100, 4],  border: [133, 100, 4] },   // #fff3cd / #856404
+  manter:   { bg: [248, 249, 250], text: [108, 117, 125], border: [108, 117, 125] }, // #f8f9fa / #6c757d
+  aumentar: { bg: [212, 237, 218], text: [21, 87, 36],   border: [21, 87, 36] },    // #d4edda / #155724
+  entrar:   { bg: [209, 236, 241], text: [12, 84, 96],   border: [12, 84, 96] },    // #d1ecf1 / #0c5460
 };
 
 const MOV_HEADER_BG: Record<string, RGB> = {
@@ -144,12 +145,9 @@ export async function exportRelatorioPDF(
   const LOGO_W1 = LOGO_H1 * 2.5; // approximate aspect ratio
   const LOGO_W2 = LOGO_H2 * 2.5;
 
-  // Navy background block for logo (#0a1628)
-  const NAVY_BG: RGB = [10, 22, 40];
-  const BLOCK_W1 = 63;  // ~180px for page 1
-  const BLOCK_H1 = 21;  // ~60px for page 1
-  const BLOCK_W2 = 50;  // smaller for subsequent pages
-  const BLOCK_H2 = 17;
+  // Full-width navy header bar
+  const HEADER_H1 = 25;  // 70px ≈ 25mm (page 1)
+  const HEADER_H2 = 18;  // smaller for subsequent pages
 
   // Line heights
   const LH_BODY = 5.3;    // 10pt * 1.5 line-height ≈ 5.3mm
@@ -157,20 +155,14 @@ export async function exportRelatorioPDF(
   // ── Subsequent page header (pages 2+) ─────────────────────
 
   const drawPageHeader = () => {
-    // Navy rectangle at top right
-    const blockX = W - BLOCK_W2;
-    doc.setFillColor(...NAVY_BG);
-    doc.rect(blockX, 0, BLOCK_W2, BLOCK_H2, "F");
-    // Logo centered inside the navy block
+    // Full-width navy bar
+    doc.setFillColor(...C_NAVY);
+    doc.rect(0, 0, W, HEADER_H2, "F");
+    // Logo right-aligned inside the bar
     if (logoBase64) {
-      const logoX = blockX + (BLOCK_W2 - LOGO_W2) / 2;
-      const logoY = (BLOCK_H2 - LOGO_H2) / 2;
-      doc.addImage(logoBase64, "PNG", logoX, logoY, LOGO_W2, LOGO_H2, undefined, "FAST");
+      const logoY = (HEADER_H2 - LOGO_H2) / 2;
+      doc.addImage(logoBase64, "PNG", W - 7 - LOGO_W2, logoY, LOGO_W2, LOGO_H2, undefined, "FAST");
     }
-    // Horizontal line below
-    doc.setDrawColor(...C_BORDER);
-    doc.setLineWidth(0.18);
-    doc.line(M, BLOCK_H2 + 2, W - M, BLOCK_H2 + 2);
   };
 
   // ── Page break ────────────────────────────────────────────
@@ -179,7 +171,7 @@ export async function exportRelatorioPDF(
     if (y + needed > H - 18) {
       doc.addPage();
       drawPageHeader();
-      y = M + LOGO_H2 + 5;
+      y = HEADER_H2 + 5;
     }
   };
 
@@ -202,7 +194,7 @@ export async function exportRelatorioPDF(
 
   const addTableNote = () => {
     doc.setFontSize(7);
-    doc.setTextColor(...C_FOOTER);
+    doc.setTextColor(...C_NAVY);
     doc.setFont("helvetica", "italic");
     doc.text("Recomendação Nord Research.", M, y);
     y += 6;
@@ -210,7 +202,7 @@ export async function exportRelatorioPDF(
 
   // ── autoTable shared config ───────────────────────────────
 
-  const tableTopMargin = M + LOGO_H2 + 5;
+  const tableTopMargin = HEADER_H2 + 5;
   const tableStyles = {
     fontSize: 9,
     cellPadding: 1.4,       // 4px ≈ 1.4mm
@@ -219,10 +211,10 @@ export async function exportRelatorioPDF(
     textColor: C_TEXT,
   };
   const tableHeadStyles = {
-    fillColor: C_HEAD_BG,
-    textColor: C_TEXT,
+    fillColor: C_NAVY,
+    textColor: [255, 255, 255] as RGB,
     fontStyle: "bold" as const,
-    lineColor: C_BORDER,
+    lineColor: C_NAVY,
     fontSize: 9,
   };
   const getLastTableY = () =>
@@ -278,30 +270,29 @@ export async function exportRelatorioPDF(
   //  PAGE 1 HEADER
   // ════════════════════════════════════════════════════════════
 
-  // Title — 22pt, bold, #1a1a1a
+  // Full-width navy header bar
+  doc.setFillColor(...C_NAVY);
+  doc.rect(0, 0, W, HEADER_H1, "F");
+
+  // Title — 22pt, bold, white, inside the navy bar
   doc.setFontSize(22);
-  doc.setTextColor(...C_TEXT);
+  doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
-  doc.text("Análise de Portfólio", M, y + 7);
+  doc.text("Análise de Portfólio", M, 12);
 
-  // Date — 11pt, #555555, below title
+  // Date — 11pt, light gray, below title inside the bar
   doc.setFontSize(11);
-  doc.setTextColor(...C_DATE);
+  doc.setTextColor(...C_HEADER_DATE);
   doc.setFont("helvetica", "normal");
-  doc.text(formatDateBR(relatorio.created_at), M, y + 13);
+  doc.text(formatDateBR(relatorio.created_at), M, 18);
 
-  // Navy block + Logo — right side, height 45px (16mm)
-  const block1X = W - BLOCK_W1;
-  doc.setFillColor(...NAVY_BG);
-  doc.rect(block1X, 0, BLOCK_W1, BLOCK_H1, "F");
+  // Logo right-aligned inside the navy bar
   if (logoBase64) {
-    const logoX = block1X + (BLOCK_W1 - LOGO_W1) / 2;
-    const logoY = (BLOCK_H1 - LOGO_H1) / 2;
-    doc.addImage(logoBase64, "PNG", logoX, logoY, LOGO_W1, LOGO_H1, undefined, "FAST");
+    const logoY = (HEADER_H1 - LOGO_H1) / 2;
+    doc.addImage(logoBase64, "PNG", W - 7 - LOGO_W1, logoY, LOGO_W1, LOGO_H1, undefined, "FAST");
   }
 
-  // No separator line on page 1
-  y += 20;
+  y = HEADER_H1 + 5;
 
   // Info line
   doc.setFontSize(10);
@@ -374,7 +365,8 @@ export async function exportRelatorioPDF(
         }
         // Total row
         if (isTotal) {
-          data.cell.styles.fillColor = C_HEAD_BG;
+          data.cell.styles.fillColor = C_NAVY;
+          data.cell.styles.textColor = [255, 255, 255] as RGB;
         }
         // Movimentação badge
         if (data.column.index === 10 && !isTotal) {
@@ -552,7 +544,8 @@ export async function exportRelatorioPDF(
           data.cell.styles.fillColor = C_ALT_ROW;
         }
         if (isTotal) {
-          data.cell.styles.fillColor = C_HEAD_BG;
+          data.cell.styles.fillColor = C_NAVY;
+          data.cell.styles.textColor = [255, 255, 255] as RGB;
         }
       }
     },
