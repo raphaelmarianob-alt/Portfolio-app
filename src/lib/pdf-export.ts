@@ -77,21 +77,6 @@ const MOV_BADGE: Record<string, { bg: RGB; text: RGB; border: RGB }> = {
   entrar:   { bg: [209, 236, 241], text: [12, 84, 96],   border: [12, 84, 96] },    // #d1ecf1 / #0c5460
 };
 
-const MOV_HEADER_BG: Record<string, RGB> = {
-  sair:     [220, 38, 38],    // #dc2626
-  reduzir:  [234, 88, 12],    // #ea580c
-  manter:   [107, 114, 128],  // #6b7280
-  aumentar: [22, 163, 74],    // #16a34a
-  entrar:   [37, 99, 235],    // #2563eb
-};
-
-const MOV_CELL_BG: Record<string, RGB> = {
-  sair:     [255, 245, 245],
-  reduzir:  [255, 251, 245],
-  manter:   [250, 250, 252],
-  aumentar: [245, 255, 248],
-  entrar:   [245, 249, 255],
-};
 
 // ── Logo loader (SVG → PNG via canvas) ──────────────────────
 
@@ -412,68 +397,90 @@ export async function exportRelatorioPDF(
     aumentar: "AUMENTAR", entrar: "ENTRAR",
   };
 
-  const maxTickers = Math.max(...Object.values(movGroups).map((g) => g.length), 1);
-  const headerH = 7;
-  const tickerH = 5;
-  const bodyH = maxTickers * tickerH + 4;
-  pageBreak(headerH + bodyH + 4);
+  // Colors: header bg + thin top bar
+  const MOV_COL_HEADER: Record<string, RGB> = {
+    sair:     [220, 53, 69],   // #dc3545
+    reduzir:  [0, 102, 204],   // #0066cc
+    manter:   [0, 102, 204],   // #0066cc
+    aumentar: [0, 102, 204],   // #0066cc
+    entrar:   [40, 167, 69],   // #28a745
+  };
+  const MOV_COL_BAR: Record<string, RGB> = {
+    sair:     [255, 107, 107], // #ff6b6b
+    reduzir:  [77, 166, 255],  // #4da6ff
+    manter:   [77, 166, 255],  // #4da6ff
+    aumentar: [77, 166, 255],  // #4da6ff
+    entrar:   [92, 214, 92],   // #5cd65c
+  };
 
-  // Draw outer border
+  const maxTickers = Math.max(...Object.values(movGroups).map((g) => g.length), 1);
+  const topBarH = 1;           // 3px ≈ 1mm
+  const headerH = 7;           // header text area
+  const tickerH = 6.35;        // 18px ≈ 6.35mm
+  const totalH = topBarH + headerH + maxTickers * tickerH;
+  pageBreak(totalH + 6);
+
+  // Outer border
   doc.setDrawColor(...C_BORDER);
   doc.setLineWidth(0.18);
-  doc.rect(M, y, CW, headerH + bodyH);
+  doc.rect(M, y, CW, totalH);
 
-  // Column headers
   movOrder.forEach((mov, i) => {
     const x = M + i * colW;
-    doc.setFillColor(...MOV_HEADER_BG[mov]);
-    doc.rect(x, y, colW, headerH, "F");
-    // Vertical separator
-    if (i > 0) {
-      doc.setDrawColor(255, 255, 255);
-      doc.setLineWidth(0.3);
-      doc.line(x, y, x, y + headerH);
-    }
-    doc.setFontSize(9);
+
+    // ── Top color bar (thin accent) ──
+    doc.setFillColor(...MOV_COL_BAR[mov]);
+    doc.rect(x, y, colW, topBarH, "F");
+
+    // ── Header background ──
+    doc.setFillColor(...MOV_COL_HEADER[mov]);
+    doc.rect(x, y + topBarH, colW, headerH, "F");
+
+    // Header text
+    doc.setFontSize(10);
     doc.setTextColor(255, 255, 255);
     doc.setFont("helvetica", "bold");
     doc.text(
       `${movLabels[mov]} (${movGroups[mov].length})`,
       x + colW / 2,
-      y + 5,
+      y + topBarH + 5,
       { align: "center" }
     );
-  });
 
-  const bodyY = y + headerH;
+    // ── Ticker rows (white bg, bottom border) ──
+    const rowsY = y + topBarH + headerH;
+    const tickers = movGroups[mov];
 
-  // Column bodies
-  movOrder.forEach((mov, i) => {
-    const x = M + i * colW;
-    doc.setFillColor(...MOV_CELL_BG[mov]);
-    doc.rect(x, bodyY, colW, bodyH, "F");
-    // Vertical borders
+    for (let j = 0; j < maxTickers; j++) {
+      const ry = rowsY + j * tickerH;
+
+      // White background
+      doc.setFillColor(255, 255, 255);
+      doc.rect(x, ry, colW, tickerH, "F");
+
+      // Bottom border
+      doc.setDrawColor(224, 224, 224); // #e0e0e0
+      doc.setLineWidth(0.1);
+      doc.line(x, ry + tickerH, x + colW, ry + tickerH);
+
+      // Ticker text (or empty)
+      if (j < tickers.length) {
+        doc.setFontSize(9);
+        doc.setTextColor(...C_TEXT);
+        doc.setFont("helvetica", "normal");
+        doc.text(tickers[j], x + colW / 2, ry + tickerH / 2 + 1.2, { align: "center" });
+      }
+    }
+
+    // Vertical column separator
     if (i > 0) {
       doc.setDrawColor(...C_BORDER);
       doc.setLineWidth(0.18);
-      doc.line(x, bodyY, x, bodyY + bodyH);
-    }
-
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(...C_TEXT);
-    const tickers = movGroups[mov];
-    if (tickers.length === 0) {
-      doc.setTextColor(...C_FOOTER);
-      doc.text("—", x + colW / 2, bodyY + 5, { align: "center" });
-    } else {
-      tickers.forEach((ticker, j) => {
-        doc.text(ticker, x + colW / 2, bodyY + 5 + j * tickerH, { align: "center" });
-      });
+      doc.line(x, y, x, y + totalH);
     }
   });
 
-  y = bodyY + bodyH + 10;
+  y += totalH + 10;
 
   // ════════════════════════════════════════════════════════════
   //  CONSIDERAÇÕES MOVIMENTAÇÕES
