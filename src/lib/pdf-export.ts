@@ -80,7 +80,12 @@ const MOV_BADGE: Record<string, { bg: RGB; text: RGB; border: RGB }> = {
 
 // ── Logo loader (SVG → PNG via canvas) ──────────────────────
 
-async function loadLogoBase64(): Promise<string | null> {
+interface LogoData {
+  base64: string;
+  aspectRatio: number; // width / height
+}
+
+async function loadLogoBase64(): Promise<LogoData | null> {
   try {
     const res = await fetch("/logo.svg");
     const svgText = await res.text();
@@ -97,7 +102,8 @@ async function loadLogoBase64(): Promise<string | null> {
         if (!ctx) { resolve(null); return; }
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         URL.revokeObjectURL(url);
-        resolve(canvas.toDataURL("image/png"));
+        const aspectRatio = img.naturalWidth / img.naturalHeight;
+        resolve({ base64: canvas.toDataURL("image/png"), aspectRatio });
       };
       img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
       img.src = url;
@@ -122,13 +128,23 @@ export async function exportRelatorioPDF(
   const CW = W - M * 2;                        // content width
   let y = M;
 
-  const logoBase64 = await loadLogoBase64();
+  const logoData = await loadLogoBase64();
 
-  // Logo dimensions (aspect ratio preserved)
-  const LOGO_H1 = 16;  // 45px ≈ 16mm (page 1)
-  const LOGO_H2 = 12;  // 35px ≈ 12mm (page 2+)
-  const LOGO_W1 = LOGO_H1 * 2.5; // approximate aspect ratio
-  const LOGO_W2 = LOGO_H2 * 2.5;
+  // Logo: max 160px (≈56mm) wide, 45px (≈16mm) tall — preserve aspect ratio
+  const MAX_LOGO_W = 56;  // 160px ≈ 56mm
+  const MAX_LOGO_H1 = 16; // 45px ≈ 16mm (page 1)
+  const MAX_LOGO_H2 = 12; // 35px ≈ 12mm (page 2+)
+  const ar = logoData?.aspectRatio ?? 2.5;
+
+  // Fit within bounds: try height-first, clamp width
+  const fitLogo = (maxH: number) => {
+    let h = maxH;
+    let w = h * ar;
+    if (w > MAX_LOGO_W) { w = MAX_LOGO_W; h = w / ar; }
+    return { w, h };
+  };
+  const logo1 = fitLogo(MAX_LOGO_H1);
+  const logo2 = fitLogo(MAX_LOGO_H2);
 
   // Full-width navy header bar
   const HEADER_H1 = 25;  // 70px ≈ 25mm (page 1)
@@ -139,14 +155,16 @@ export async function exportRelatorioPDF(
 
   // ── Subsequent page header (pages 2+) ─────────────────────
 
+  const LOGO_PAD = 3.5; // 10px ≈ 3.5mm padding inside navy bar
+
   const drawPageHeader = () => {
     // Full-width navy bar
     doc.setFillColor(...C_NAVY);
     doc.rect(0, 0, W, HEADER_H2, "F");
-    // Logo right-aligned inside the bar
-    if (logoBase64) {
-      const logoY = (HEADER_H2 - LOGO_H2) / 2;
-      doc.addImage(logoBase64, "PNG", W - 7 - LOGO_W2, logoY, LOGO_W2, LOGO_H2, undefined, "FAST");
+    // Logo right-aligned inside the bar with 10px padding
+    if (logoData) {
+      const logoY = (HEADER_H2 - logo2.h) / 2;
+      doc.addImage(logoData.base64, "PNG", W - LOGO_PAD - logo2.w, logoY, logo2.w, logo2.h, undefined, "FAST");
     }
   };
 
@@ -271,10 +289,10 @@ export async function exportRelatorioPDF(
   doc.setFont("helvetica", "normal");
   doc.text(formatDateBR(relatorio.created_at), M, 18);
 
-  // Logo right-aligned inside the navy bar
-  if (logoBase64) {
-    const logoY = (HEADER_H1 - LOGO_H1) / 2;
-    doc.addImage(logoBase64, "PNG", W - 7 - LOGO_W1, logoY, LOGO_W1, LOGO_H1, undefined, "FAST");
+  // Logo right-aligned inside the navy bar with 10px padding
+  if (logoData) {
+    const logoY = (HEADER_H1 - logo1.h) / 2;
+    doc.addImage(logoData.base64, "PNG", W - LOGO_PAD - logo1.w, logoY, logo1.w, logo1.h, undefined, "FAST");
   }
 
   y = HEADER_H1 + 5;
