@@ -20,7 +20,7 @@ interface CarteiraRow {
 const objetivos = [
   "Dividendos",
   "Small Caps",
-  "Reducao de Posicoes",
+  "Redução de Posições",
   "Crescimento",
   "Balanceamento Geral",
 ];
@@ -223,7 +223,7 @@ export default function NovoPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-white mb-6">Novo Relatorio</h1>
+      <h1 className="text-2xl font-bold text-white mb-6">Novo Relatório</h1>
 
       <div className="bg-[#12131a] rounded-xl border border-[#1e2030] shadow-[0_4px_6px_rgba(0,0,0,0.3)] p-6 mb-5">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -237,7 +237,7 @@ export default function NovoPage() {
             />
           </div>
           <div>
-            <label className="block text-xs text-[#71717a] mb-1.5">% do PL em Acoes</label>
+            <label className="block text-xs text-[#71717a] mb-1.5">% do PL em Ações</label>
             <input
               type="number"
               step="0.1"
@@ -260,7 +260,7 @@ export default function NovoPage() {
             </select>
           </div>
           <div>
-            <label className="block text-xs text-[#71717a] mb-1.5">Reducao do Patrimonio em Acoes</label>
+            <label className="block text-xs text-[#71717a] mb-1.5">Redução do Patrimônio em Ações</label>
             <select
               value={pctReducao}
               onChange={(e) => setPctReducao(e.target.value)}
@@ -411,7 +411,7 @@ export default function NovoPage() {
               <tfoot>
                 <tr className="font-semibold">
                   <td></td>
-                  <td className="text-[#e4e4e7]">Total / Media</td>
+                  <td className="text-[#e4e4e7]">Total / Média</td>
                   <td className="text-right text-emerald-400">{totalValor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</td>
                   <td className="text-right text-[#e4e4e7]">{totalPeso.toFixed(2)}%</td>
                   <td></td>
@@ -449,11 +449,11 @@ export default function NovoPage() {
               </svg>
               Gerando...
             </span>
-          ) : "Gerar Sugestao"}
+          ) : "Gerar Sugestão"}
         </button>
         {saved && (
           <span className="text-xs px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400">
-            Relatorio salvo com sucesso!
+            Relatório salvo com sucesso!
           </span>
         )}
         {erro && (

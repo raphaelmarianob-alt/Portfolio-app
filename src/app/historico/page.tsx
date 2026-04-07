@@ -46,7 +46,7 @@ export default function HistoricoPage() {
       if (!res.ok) {
         console.error("Erro ao buscar relatorios:", res.status);
         setRelatorios([]);
-        setError("Erro ao carregar relatorios");
+        setError("Erro ao carregar relatórios");
         return;
       }
       const data = await res.json();
@@ -54,7 +54,7 @@ export default function HistoricoPage() {
     } catch (err) {
       console.error("Erro ao buscar relatorios:", err);
       setRelatorios([]);
-      setError("Erro de conexao ao carregar relatorios");
+      setError("Erro de conexão ao carregar relatórios");
     } finally {
       setLoading(false);
     }
@@ -65,7 +65,7 @@ export default function HistoricoPage() {
   }, []);
 
   const handleDelete = async (id: number) => {
-    if (!confirm("Excluir este relatorio?")) return;
+    if (!confirm("Excluir este relatório?")) return;
     try {
       await fetch(`/api/relatorios/${id}`, { method: "DELETE" });
     } catch (err) {
@@ -88,7 +88,7 @@ export default function HistoricoPage() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-white mb-6">Historico de Relatorios</h1>
+      <h1 className="text-2xl font-bold text-white mb-6">Histórico de Relatórios</h1>
 
       {loading ? (
         <div className="flex items-center justify-center py-16">
@@ -104,7 +104,7 @@ export default function HistoricoPage() {
         </div>
       ) : relatorios.length === 0 ? (
         <div className="bg-[#12131a] rounded-xl border border-[#1e2030] p-12 text-center text-[#71717a]">
-          Nenhum relatorio gerado ainda.
+          Nenhum relatório encontrado.
         </div>
       ) : (
         <div className="space-y-3">
@@ -160,7 +160,7 @@ export default function HistoricoPage() {
                         <th>Tipo</th>
                         <th className="text-right">Valor R$</th>
                         <th className="text-right">Peso %</th>
-                        <th>Movimentacao</th>
+                        <th>Movimentação</th>
                       </tr>
                     </thead>
                     <tbody>

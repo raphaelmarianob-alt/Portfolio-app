@@ -15,8 +15,8 @@ const columns = [
   { key: "p_l", label: "P/L", type: "number" as const },
   { key: "ev_ebitda", label: "EV/EBITDA", type: "number" as const },
   { key: "div_yield", label: "Div. Yield", type: "number" as const },
-  { key: "pct_max_carteira", label: "% Max Cart.", type: "number" as const },
-  { key: "preco_teto", label: "Preco Teto", type: "number" as const },
+  { key: "pct_max_carteira", label: "% Máx. Cart.", type: "number" as const },
+  { key: "preco_teto", label: "Preço Teto", type: "number" as const },
 ];
 
 const recomendacaoStyle: Record<string, { dot: string; text: string }> = {
@@ -61,7 +61,7 @@ export function ResearchTable({ ativos, orderBy, order, onSort, onUpdate, onDele
                 )}
               </th>
             ))}
-            <th className="w-16">Acoes</th>
+            <th className="w-16">Ações</th>
           </tr>
         </thead>
         <tbody>

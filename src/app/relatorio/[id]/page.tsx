@@ -76,7 +76,7 @@ export default function RelatorioPage({ params }: { params: Promise<{ id: string
         ]);
 
         if (!relRes.ok) {
-          setError("Relatorio nao encontrado");
+          setError("Relatório não encontrado");
           return;
         }
 
@@ -88,7 +88,7 @@ export default function RelatorioPage({ params }: { params: Promise<{ id: string
           setResearchMap(new Map(researchData.map((r) => [r.ticker, r])));
         }
       } catch {
-        setError("Erro ao carregar relatorio");
+        setError("Erro ao carregar relatório");
       } finally {
         setLoading(false);
       }
@@ -110,7 +110,7 @@ export default function RelatorioPage({ params }: { params: Promise<{ id: string
   if (error || !relatorio) {
     return (
       <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-center text-red-400">
-        {error || "Relatorio nao encontrado"}
+        {error || "Relatório não encontrado"}
       </div>
     );
   }
@@ -224,7 +224,7 @@ export default function RelatorioPage({ params }: { params: Promise<{ id: string
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-white">
-            Analise de Portfolio — {relatorio.nome_cliente}
+            Análise de Portfólio — {relatorio.nome_cliente}
           </h1>
           <p className="text-sm text-[#71717a] mt-1">
             {new Date(relatorio.created_at).toLocaleDateString("pt-BR")} · {relatorio.objetivo} · {relatorio.pct_pl_acoes}% do PL
@@ -246,7 +246,7 @@ export default function RelatorioPage({ params }: { params: Promise<{ id: string
       {/* Portfolio Atual */}
       <section className="mb-8">
         <h3 className="text-base font-semibold text-white mb-4 pb-2 border-b border-[#1e2030]">
-          Portfolio Atual
+          Portfólio Atual
         </h3>
         {renderTable(ativosAtuais, totalAtual)}
       </section>
@@ -254,7 +254,7 @@ export default function RelatorioPage({ params }: { params: Promise<{ id: string
       {/* Movimentacoes Sugeridas */}
       <section className="mb-8">
         <h3 className="text-base font-semibold text-white mb-4 pb-2 border-b border-[#1e2030]">
-          Movimentacoes Sugeridas
+          Movimentações Sugeridas
         </h3>
         <div className="grid grid-cols-5 gap-3">
           {(["sair", "reduzir", "manter", "aumentar", "entrar"] as const).map((mov) => {
@@ -287,7 +287,7 @@ export default function RelatorioPage({ params }: { params: Promise<{ id: string
       {ativosComMov.length > 0 && (
         <section className="mb-8">
           <h3 className="text-base font-semibold text-white mb-4 pb-2 border-b border-[#1e2030]">
-            Consideracoes sobre as Principais Movimentacoes
+            Considerações sobre as Principais Movimentações
           </h3>
           <div className="space-y-4">
             {ativosComMov.map((a) => {
@@ -311,7 +311,7 @@ export default function RelatorioPage({ params }: { params: Promise<{ id: string
       {/* Portfolio Sugerido */}
       <section className="mb-8">
         <h3 className="text-base font-semibold text-white mb-4 pb-2 border-b border-[#1e2030]">
-          Portfolio Sugerido
+          Portfólio Sugerido
         </h3>
         {renderTable(ativosSugeridos, totalSugerido, true)}
       </section>
@@ -320,7 +320,7 @@ export default function RelatorioPage({ params }: { params: Promise<{ id: string
       {ativosNovos.length > 0 && (
         <section className="mb-8">
           <h3 className="text-base font-semibold text-white mb-4 pb-2 border-b border-[#1e2030]">
-            Consideracoes sobre as Principais Recomendacoes
+            Considerações sobre as Principais Recomendações
           </h3>
           <div className="space-y-4">
             {ativosNovos.map((a) => {
