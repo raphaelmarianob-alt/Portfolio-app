@@ -17,11 +17,15 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { ativos, ...relatorioData } = body;
+    const { nome_cliente, objetivo, pct_pl_acoes, valor_total, pct_reducao, ativos } = body;
 
     const relatorio = await prisma.relatorio.create({
       data: {
-        ...relatorioData,
+        nome_cliente,
+        objetivo,
+        pct_pl_acoes,
+        valor_total,
+        pct_reducao: pct_reducao ?? null,
         ativos: ativos
           ? { create: ativos }
           : undefined,

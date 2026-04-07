@@ -30,10 +30,12 @@ export default function NovoPage() {
   const [nomeCliente, setNomeCliente] = useState("");
   const [pctPl, setPctPl] = useState("");
   const [objetivo, setObjetivo] = useState(objetivos[0]);
+  const [pctReducao, setPctReducao] = useState("");
   const [carteira, setCarteira] = useState<CarteiraRow[]>([]);
   const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
   const [savedId, setSavedId] = useState<number | null>(null);
   const [inputMode, setInputMode] = useState<"csv" | "manual">("csv");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -141,6 +143,7 @@ export default function NovoPage() {
           nome_cliente: nomeCliente,
           objetivo,
           pct_pl_acoes: parseFloat(pctPl) || 0,
+          pct_reducao: pctReducao ? parseFloat(pctReducao) : null,
           valor_total: totalValor,
           ativos: carteira.map((r) => ({
             ticker: r.ticker,
@@ -165,6 +168,7 @@ export default function NovoPage() {
   const handleGerarSugestao = async () => {
     if (!savedId && !nomeCliente) return;
     setGenerating(true);
+    setErro(null);
 
     try {
       let relatorioId = savedId;
@@ -177,6 +181,7 @@ export default function NovoPage() {
             nome_cliente: nomeCliente,
             objetivo,
             pct_pl_acoes: parseFloat(pctPl) || 0,
+            pct_reducao: pctReducao ? parseFloat(pctReducao) : null,
             valor_total: totalValor,
             ativos: carteira.map((r) => ({
               ticker: r.ticker,
@@ -186,7 +191,12 @@ export default function NovoPage() {
             })),
           }),
         });
-        if (!res.ok) return;
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          console.error("Erro ao salvar relatorio:", errData);
+          setErro("Erro ao salvar relatório. Tente novamente.");
+          return;
+        }
         const data = await res.json();
         relatorioId = data.id;
         setSavedId(relatorioId);
@@ -198,7 +208,14 @@ export default function NovoPage() {
 
       if (sugRes.ok) {
         router.push(`/relatorio/${relatorioId}`);
+      } else {
+        const errData = await sugRes.json().catch(() => ({}));
+        console.error("Erro ao gerar sugestão:", errData);
+        setErro("Erro ao gerar sugestão. Tente novamente.");
       }
+    } catch (err) {
+      console.error("Erro inesperado ao gerar sugestão:", err);
+      setErro("Erro ao gerar sugestão. Tente novamente.");
     } finally {
       setGenerating(false);
     }
@@ -209,7 +226,7 @@ export default function NovoPage() {
       <h1 className="text-2xl font-bold text-white mb-6">Novo Relatorio</h1>
 
       <div className="bg-[#12131a] rounded-xl border border-[#1e2030] shadow-[0_4px_6px_rgba(0,0,0,0.3)] p-6 mb-5">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label className="block text-xs text-[#71717a] mb-1.5">Nome do Cliente</label>
             <input
@@ -240,6 +257,19 @@ export default function NovoPage() {
               {objetivos.map((o) => (
                 <option key={o} value={o}>{o}</option>
               ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-[#71717a] mb-1.5">Reducao do Patrimonio em Acoes</label>
+            <select
+              value={pctReducao}
+              onChange={(e) => setPctReducao(e.target.value)}
+              className="w-full bg-[#1a1b26] border border-[#2e3044] rounded-lg px-3 py-2.5 text-sm text-[#e4e4e7] focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500/30"
+            >
+              <option value="">Nenhuma</option>
+              <option value="25">25%</option>
+              <option value="50">50%</option>
+              <option value="75">75%</option>
             </select>
           </div>
         </div>
@@ -424,6 +454,11 @@ export default function NovoPage() {
         {saved && (
           <span className="text-xs px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-400">
             Relatorio salvo com sucesso!
+          </span>
+        )}
+        {erro && (
+          <span className="text-xs px-2.5 py-1 rounded-lg bg-red-500/10 text-red-400">
+            {erro}
           </span>
         )}
       </div>

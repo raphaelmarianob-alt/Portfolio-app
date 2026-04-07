@@ -4,7 +4,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
 }
 
 model ResearchBase {
@@ -34,6 +34,7 @@ model Relatorio {
   objetivo     String
   pct_pl_acoes Float
   valor_total  Float            @default(0)
+  pct_reducao  Float?
   status       String           @default("rascunho") // rascunho, finalizado
   created_at   DateTime         @default(now())
   ativos       RelatorioAtivo[]

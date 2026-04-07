@@ -142,11 +142,14 @@ export default function RelatorioPage({ params }: { params: Promise<{ id: string
   const totalAtual = ativosAtuais.reduce((s, a) => s + a.valor_rs, 0);
   const totalSugerido = ativosSugeridos.reduce((s, a) => s + a.valor_rs, 0);
 
+  // Map de valor atual por ticker para calcular mov_rs
+  const valorAtualMap = new Map(ativosAtuais.map((a) => [a.ticker, a.valor_rs]));
+
   const handleExportPDF = async () => {
     await exportRelatorioPDF(relatorio, ativosAtuais, ativosSugeridos, researchMap);
   };
 
-  const renderTable = (ativos: AtivoRelatorio[], total: number) => (
+  const renderTable = (ativos: AtivoRelatorio[], total: number, showMovRs = false) => (
     <div className="overflow-x-auto bg-[#12131a] rounded-xl border border-[#1e2030] shadow-[0_4px_6px_rgba(0,0,0,0.3)]">
       <table>
         <thead>
@@ -163,6 +166,7 @@ export default function RelatorioPage({ params }: { params: Promise<{ id: string
             <th className="text-right">EV/EBITDA</th>
             <th className="text-right">Div. Yield</th>
             <th>Mov.</th>
+            {showMovRs && <th className="text-right">Mov. R$</th>}
           </tr>
         </thead>
         <tbody>
@@ -170,6 +174,8 @@ export default function RelatorioPage({ params }: { params: Promise<{ id: string
             const r = researchMap.get(a.ticker);
             const mov = a.movimentacao || "manter";
             const movStyle = MOV_COLORS[mov] || MOV_COLORS.manter;
+            const valorAnterior = valorAtualMap.get(a.ticker) || 0;
+            const movRs = a.valor_rs - valorAnterior;
             return (
               <tr key={a.id}>
                 <td className="text-[#71717a] text-center">{i + 1}</td>
@@ -188,6 +194,11 @@ export default function RelatorioPage({ params }: { params: Promise<{ id: string
                     {movStyle.label}
                   </span>
                 </td>
+                {showMovRs && (
+                  <td className={`text-right text-xs font-medium ${movRs < -0.01 ? "text-red-400" : movRs > 0.01 ? "text-emerald-400" : "text-zinc-400"}`}>
+                    {movRs < -0.01 ? "−" : movRs > 0.01 ? "+" : ""}{fmtCurrency(Math.abs(movRs))}
+                  </td>
+                )}
               </tr>
             );
           })}
@@ -200,7 +211,7 @@ export default function RelatorioPage({ params }: { params: Promise<{ id: string
             <td></td>
             <td className="text-right text-emerald-400">{fmtCurrency(total)}</td>
             <td className="text-right text-white">100.00%</td>
-            <td colSpan={6}></td>
+            <td colSpan={showMovRs ? 7 : 6}></td>
           </tr>
         </tfoot>
       </table>
@@ -302,7 +313,7 @@ export default function RelatorioPage({ params }: { params: Promise<{ id: string
         <h3 className="text-base font-semibold text-white mb-4 pb-2 border-b border-[#1e2030]">
           Portfolio Sugerido
         </h3>
-        {renderTable(ativosSugeridos, totalSugerido)}
+        {renderTable(ativosSugeridos, totalSugerido, true)}
       </section>
 
       {/* Consideracoes Recomendacoes (novos ativos) */}

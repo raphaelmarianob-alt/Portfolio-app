@@ -1,6 +1,8 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
+// ── Interfaces ──────────────────────────────────────────────
+
 interface AtivoRelatorio {
   id: number;
   ticker: string;
@@ -35,42 +37,91 @@ interface ResearchAtivo {
   analise_texto: string;
 }
 
+// ── Helpers ─────────────────────────────────────────────────
+
 const fmt = (v: number | null | undefined) =>
   v !== null && v !== undefined ? v.toFixed(2) : "—";
 
 const fmtCurrency = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+const MESES = [
+  "jan.", "fev.", "mar.", "abr.", "mai.", "jun.",
+  "jul.", "ago.", "set.", "out.", "nov.", "dez.",
+];
+
+function formatDateBR(dateStr: string): string {
+  const d = new Date(dateStr);
+  return `${d.getDate()} de ${MESES[d.getMonth()]} de ${d.getFullYear()}`;
+}
+
+// ── Colors (RGB tuples) ─────────────────────────────────────
+
+type RGB = [number, number, number];
+
+const C_TEXT: RGB = [26, 26, 26];         // #1a1a1a
+const C_DATE: RGB = [85, 85, 85];         // #555555
+const C_BORDER: RGB = [204, 204, 204];    // #cccccc
+const C_HEAD_BG: RGB = [240, 240, 240];   // #f0f0f0
+const C_ALT_ROW: RGB = [250, 250, 250];   // #fafafa
+const C_FOOTER: RGB = [136, 136, 136];    // #888888
+
+const MOV_BADGE: Record<string, { bg: RGB; text: RGB; border: RGB }> = {
+  sair:     { bg: [254, 226, 226], text: [220, 38, 38],  border: [220, 38, 38] },   // #fee2e2 / #dc2626
+  reduzir:  { bg: [255, 237, 213], text: [234, 88, 12],  border: [234, 88, 12] },   // #ffedd5 / #ea580c
+  manter:   { bg: [243, 244, 246], text: [107, 114, 128], border: [107, 114, 128] }, // #f3f4f6 / #6b7280
+  aumentar: { bg: [220, 252, 231], text: [22, 163, 74],  border: [22, 163, 74] },   // #dcfce7 / #16a34a
+  entrar:   { bg: [219, 234, 254], text: [37, 99, 235],  border: [37, 99, 235] },   // #dbeafe / #2563eb
+};
+
+const MOV_HEADER_BG: Record<string, RGB> = {
+  sair:     [220, 38, 38],    // #dc2626
+  reduzir:  [234, 88, 12],    // #ea580c
+  manter:   [107, 114, 128],  // #6b7280
+  aumentar: [22, 163, 74],    // #16a34a
+  entrar:   [37, 99, 235],    // #2563eb
+};
+
+const MOV_CELL_BG: Record<string, RGB> = {
+  sair:     [255, 245, 245],
+  reduzir:  [255, 251, 245],
+  manter:   [250, 250, 252],
+  aumentar: [245, 255, 248],
+  entrar:   [245, 249, 255],
+};
+
+// ── Logo loader (SVG → PNG via canvas) ──────────────────────
+
 async function loadLogoBase64(): Promise<string | null> {
   try {
-    const res = await fetch("/logo.png");
-    const blob = await res.blob();
+    const res = await fetch("/logo.svg");
+    const svgText = await res.text();
+    const img = new Image();
+    const blob = new Blob([svgText], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
     return new Promise((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.onerror = () => resolve(null);
-      reader.readAsDataURL(blob);
+      img.onload = () => {
+        const scale = 4;
+        const canvas = document.createElement("canvas");
+        canvas.width = img.naturalWidth * scale;
+        canvas.height = img.naturalHeight * scale;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { resolve(null); return; }
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        URL.revokeObjectURL(url);
+        resolve(canvas.toDataURL("image/png"));
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+      img.src = url;
     });
   } catch {
     return null;
   }
 }
 
-const MOV_COLORS: Record<string, [number, number, number]> = {
-  sair: [254, 202, 202],       // red-200
-  reduzir: [254, 215, 170],    // orange-200
-  manter: [229, 231, 235],     // gray-200
-  aumentar: [191, 219, 254],   // blue-200
-  entrar: [187, 247, 208],     // green-200
-};
-
-const MOV_HEADER_COLORS: Record<string, [number, number, number]> = {
-  sair: [220, 38, 38],
-  reduzir: [234, 88, 12],
-  manter: [107, 114, 128],
-  aumentar: [37, 99, 235],
-  entrar: [22, 163, 74],
-};
+// ── Main export ─────────────────────────────────────────────
 
 export async function exportRelatorioPDF(
   relatorio: RelatorioData,
@@ -79,398 +130,464 @@ export async function exportRelatorioPDF(
   researchMap: Map<string, ResearchAtivo>
 ) {
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const margin = 15;
-  const contentWidth = pageWidth - margin * 2;
-  let y = margin;
+  const W = doc.internal.pageSize.getWidth();   // 210
+  const H = doc.internal.pageSize.getHeight();  // 297
+  const M = 14;                                 // 40px ≈ 14mm
+  const CW = W - M * 2;                        // content width
+  let y = M;
 
   const logoBase64 = await loadLogoBase64();
 
-  const addPageNumber = () => {
-    const pageCount = (doc as unknown as { internal: { getNumberOfPages: () => number } }).internal.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-      doc.setPage(i);
-      doc.setFontSize(8);
-      doc.setTextColor(150);
-      doc.text(`Página ${i} de ${pageCount}`, pageWidth / 2, 290, { align: "center" });
-    }
-  };
+  // Logo dimensions (aspect ratio preserved)
+  const LOGO_H1 = 16;  // 45px ≈ 16mm (page 1)
+  const LOGO_H2 = 12;  // 35px ≈ 12mm (page 2+)
+  const LOGO_W1 = LOGO_H1 * 2.5; // approximate aspect ratio
+  const LOGO_W2 = LOGO_H2 * 2.5;
 
-  const addSubsequentPageHeader = () => {
+  // Navy background block for logo (#0a1628)
+  const NAVY_BG: RGB = [10, 22, 40];
+  const BLOCK_W1 = 63;  // ~180px for page 1
+  const BLOCK_H1 = 21;  // ~60px for page 1
+  const BLOCK_W2 = 50;  // smaller for subsequent pages
+  const BLOCK_H2 = 17;
+
+  // Line heights
+  const LH_BODY = 5.3;    // 10pt * 1.5 line-height ≈ 5.3mm
+
+  // ── Subsequent page header (pages 2+) ─────────────────────
+
+  const drawPageHeader = () => {
+    // Navy rectangle at top right
+    const blockX = W - BLOCK_W2;
+    doc.setFillColor(...NAVY_BG);
+    doc.rect(blockX, 0, BLOCK_W2, BLOCK_H2, "F");
+    // Logo centered inside the navy block
     if (logoBase64) {
-      doc.addImage(logoBase64, "PNG", pageWidth - margin - 30, 5, 30, 12, undefined, "FAST");
+      const logoX = blockX + (BLOCK_W2 - LOGO_W2) / 2;
+      const logoY = (BLOCK_H2 - LOGO_H2) / 2;
+      doc.addImage(logoBase64, "PNG", logoX, logoY, LOGO_W2, LOGO_H2, undefined, "FAST");
     }
-    doc.setDrawColor(200);
-    doc.setLineWidth(0.3);
-    doc.line(margin, 19, pageWidth - margin, 19);
+    // Horizontal line below
+    doc.setDrawColor(...C_BORDER);
+    doc.setLineWidth(0.18);
+    doc.line(M, BLOCK_H2 + 2, W - M, BLOCK_H2 + 2);
   };
 
-  const checkPageBreak = (needed: number) => {
-    if (y + needed > 270) {
+  // ── Page break ────────────────────────────────────────────
+
+  const pageBreak = (needed: number) => {
+    if (y + needed > H - 18) {
       doc.addPage();
-      addSubsequentPageHeader();
-      y = 24;
+      drawPageHeader();
+      y = M + LOGO_H2 + 5;
     }
   };
 
-  const addSectionTitle = (title: string) => {
-    checkPageBreak(12);
-    doc.setFontSize(12);
-    doc.setTextColor(26, 35, 50);
+  // ── Section title (13pt, bold, underlined) ────────────────
+
+  const sectionTitle = (title: string) => {
+    pageBreak(16);
+    doc.setFontSize(13);
+    doc.setTextColor(...C_TEXT);
     doc.setFont("helvetica", "bold");
-    doc.text(title, margin, y);
-    y += 1;
-    doc.setDrawColor(180);
+    doc.text(title, M, y);
+    const tw = doc.getTextWidth(title);
+    doc.setDrawColor(...C_TEXT);
     doc.setLineWidth(0.3);
-    doc.line(margin, y, margin + contentWidth, y);
-    y += 5;
+    doc.line(M, y + 1, M + tw, y + 1);
+    y += 8;
   };
 
-  // ========== HEADER (first page) ==========
-  doc.setFillColor(26, 35, 50);
-  doc.rect(0, 0, pageWidth, 28, "F");
+  // ── Note below tables ─────────────────────────────────────
 
-  doc.setFontSize(18);
-  doc.setTextColor(255);
+  const addTableNote = () => {
+    doc.setFontSize(7);
+    doc.setTextColor(...C_FOOTER);
+    doc.setFont("helvetica", "italic");
+    doc.text("Recomendação Nord Research.", M, y);
+    y += 6;
+  };
+
+  // ── autoTable shared config ───────────────────────────────
+
+  const tableTopMargin = M + LOGO_H2 + 5;
+  const tableStyles = {
+    fontSize: 9,
+    cellPadding: 1.4,       // 4px ≈ 1.4mm
+    lineColor: C_BORDER,
+    lineWidth: 0.18,        // 0.5px ≈ 0.18mm
+    textColor: C_TEXT,
+  };
+  const tableHeadStyles = {
+    fillColor: C_HEAD_BG,
+    textColor: C_TEXT,
+    fontStyle: "bold" as const,
+    lineColor: C_BORDER,
+    fontSize: 9,
+  };
+  const getLastTableY = () =>
+    (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
+
+  // ── Analysis section renderer ─────────────────────────────
+
+  const renderAnalysis = (ativos: AtivoRelatorio[]) => {
+    for (const a of ativos) {
+      const r = researchMap.get(a.ticker);
+      if (!r?.analise_texto) continue;
+
+      pageBreak(22);
+
+      // "- Nome Empresa (TICKER):" bold + underlined, 10pt
+      doc.setFontSize(10);
+      doc.setTextColor(...C_TEXT);
+      doc.setFont("helvetica", "bold");
+      const label = `- ${r.nome_empresa} (${a.ticker}):`;
+      doc.text(label, M, y);
+      const labelW = doc.getTextWidth(label);
+      doc.setDrawColor(...C_TEXT);
+      doc.setLineWidth(0.3);
+      doc.line(M, y + 0.8, M + labelW, y + 0.8);
+      y += 6;
+
+      // Body text 10pt, line-height 1.5
+      doc.setFontSize(10);
+      doc.setTextColor(...C_TEXT);
+      doc.setFont("helvetica", "normal");
+      const lines: string[] = doc.splitTextToSize(r.analise_texto, CW - 4);
+
+      for (let i = 0; i < lines.length; i++) {
+        pageBreak(LH_BODY);
+        // Last line(s) bold
+        if (
+          i >= lines.length - 2 &&
+          lines[i].match(/[Ss]ugerimos|[Rr]ecomendamos|[Mm]antemos|[Cc]onclu/)
+        ) {
+          doc.setFont("helvetica", "bold");
+        } else if (i === lines.length - 1) {
+          doc.setFont("helvetica", "bold");
+        }
+        doc.text(lines[i], M + 3, y);
+        y += LH_BODY;
+      }
+      doc.setFont("helvetica", "normal");
+      y += 4.2; // 12px spacing between analyses
+    }
+  };
+
+  // ════════════════════════════════════════════════════════════
+  //  PAGE 1 HEADER
+  // ════════════════════════════════════════════════════════════
+
+  // Title — 22pt, bold, #1a1a1a
+  doc.setFontSize(22);
+  doc.setTextColor(...C_TEXT);
   doc.setFont("helvetica", "bold");
-  doc.text("Análise de Portfólio", margin, 14);
+  doc.text("Análise de Portfólio", M, y + 7);
 
-  doc.setFontSize(10);
+  // Date — 11pt, #555555, below title
+  doc.setFontSize(11);
+  doc.setTextColor(...C_DATE);
   doc.setFont("helvetica", "normal");
-  doc.text(
-    `${relatorio.nome_cliente} · ${new Date(relatorio.created_at).toLocaleDateString("pt-BR")}`,
-    margin,
-    22
-  );
+  doc.text(formatDateBR(relatorio.created_at), M, y + 13);
 
-  // Logo on first page (top right)
+  // Navy block + Logo — right side, height 45px (16mm)
+  const block1X = W - BLOCK_W1;
+  doc.setFillColor(...NAVY_BG);
+  doc.rect(block1X, 0, BLOCK_W1, BLOCK_H1, "F");
   if (logoBase64) {
-    doc.addImage(logoBase64, "PNG", pageWidth - margin - 30, 4, 30, 20, undefined, "FAST");
+    const logoX = block1X + (BLOCK_W1 - LOGO_W1) / 2;
+    const logoY = (BLOCK_H1 - LOGO_H1) / 2;
+    doc.addImage(logoBase64, "PNG", logoX, logoY, LOGO_W1, LOGO_H1, undefined, "FAST");
   }
 
-  y = 36;
+  // No separator line on page 1
+  y += 20;
 
   // Info line
-  doc.setFontSize(9);
-  doc.setTextColor(100);
+  doc.setFontSize(10);
+  doc.setTextColor(...C_DATE);
   doc.setFont("helvetica", "normal");
   doc.text(
-    `Objetivo: ${relatorio.objetivo}  ·  % PL em Ações: ${relatorio.pct_pl_acoes}%  ·  Valor Total: ${fmtCurrency(relatorio.valor_total)}`,
-    margin,
-    y
+    `${relatorio.nome_cliente}  ·  Objetivo: ${relatorio.objetivo}  ·  % PL em Ações: ${relatorio.pct_pl_acoes}%  ·  Valor Total: ${fmtCurrency(relatorio.valor_total)}`,
+    M, y
   );
-  y += 8;
+  y += 10;
 
-  // ========== PORTFÓLIO ATUAL ==========
-  addSectionTitle("Portfólio Atual");
+  // ════════════════════════════════════════════════════════════
+  //  PORTFÓLIO ATUAL
+  // ════════════════════════════════════════════════════════════
+
+  sectionTitle("Portfólio Atual:");
 
   const totalAtual = ativosAtuais.reduce((s, a) => s + a.valor_rs, 0);
 
   autoTable(doc, {
     startY: y,
-    margin: { left: margin, right: margin, top: 24 },
-    head: [["#", "Ticker", "Empresa", "Setor", "Valor R$", "Peso %", "ROE", "P/VPA", "P/L", "EV/EBITDA", "DY", "Mov."]],
+    margin: { left: M, right: M, top: tableTopMargin },
+    head: [["#", "Ticker", "Valor R$", "Peso", "Setor", "ROE", "P/VPA", "P/L", "EV/Ebitda", "Div. Yield", "Movimentação"]],
     body: [
       ...ativosAtuais.map((a, i) => {
         const r = researchMap.get(a.ticker);
         return [
           String(i + 1),
           a.ticker,
-          r?.nome_empresa || "—",
-          r?.setor || "—",
           fmtCurrency(a.valor_rs),
           a.peso.toFixed(2) + "%",
+          r?.setor || "—",
           fmt(r?.roe),
           fmt(r?.p_vpa),
           fmt(r?.p_l),
           fmt(r?.ev_ebitda),
           fmt(r?.div_yield),
-          (a.movimentacao || "manter").charAt(0).toUpperCase() + (a.movimentacao || "manter").slice(1),
+          capitalize(a.movimentacao || "manter"),
         ];
       }),
+      // Total row
       [
         "",
         { content: "Total", styles: { fontStyle: "bold" as const } },
-        "",
-        "",
         { content: fmtCurrency(totalAtual), styles: { fontStyle: "bold" as const } },
         { content: "100.00%", styles: { fontStyle: "bold" as const } },
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
+        "", "", "", "", "", "", "",
       ],
     ],
-    styles: { fontSize: 7, cellPadding: 1.5, lineColor: [200, 200, 200], lineWidth: 0.2 },
-    headStyles: { fillColor: [245, 245, 245], textColor: [50, 50, 50], fontStyle: "bold", lineColor: [200, 200, 200] },
-    bodyStyles: { textColor: [60, 60, 60] },
+    styles: tableStyles,
+    headStyles: tableHeadStyles,
     columnStyles: {
-      0: { halign: "center", cellWidth: 6 },
-      4: { halign: "right" },
+      0: { halign: "center", cellWidth: 7 },
+      2: { halign: "right" },
+      3: { halign: "right" },
       5: { halign: "right" },
       6: { halign: "right" },
       7: { halign: "right" },
       8: { halign: "right" },
       9: { halign: "right" },
-      10: { halign: "right" },
+      10: { halign: "center", cellWidth: 22 },
     },
+    // Alternating row colors + movimentação badge + total row bg
     didParseCell: (data) => {
-      if (data.section === "body" && data.column.index === 11 && data.row.index < ativosAtuais.length) {
-        const mov = ativosAtuais[data.row.index].movimentacao || "manter";
-        const color = MOV_COLORS[mov];
-        if (color) {
-          data.cell.styles.fillColor = color;
+      if (data.section === "body") {
+        const isTotal = data.row.index === ativosAtuais.length;
+        // Alternating rows
+        if (!isTotal && data.row.index % 2 === 1) {
+          data.cell.styles.fillColor = C_ALT_ROW;
+        }
+        // Total row
+        if (isTotal) {
+          data.cell.styles.fillColor = C_HEAD_BG;
+        }
+        // Movimentação badge
+        if (data.column.index === 10 && !isTotal) {
+          const mov = ativosAtuais[data.row.index]?.movimentacao || "manter";
+          const badge = MOV_BADGE[mov] || MOV_BADGE.manter;
+          data.cell.styles.fillColor = badge.bg;
+          data.cell.styles.textColor = badge.text;
+          data.cell.styles.fontStyle = "bold";
+          data.cell.styles.lineColor = badge.border;
+          data.cell.styles.lineWidth = 0.18;
         }
       }
     },
     didDrawPage: (data) => {
-      if (data.pageNumber > 1) addSubsequentPageHeader();
+      if (data.pageNumber > 1) drawPageHeader();
     },
   });
 
-  y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+  y = getLastTableY() + 3;
+  addTableNote();
 
-  // ========== MOVIMENTAÇÕES SUGERIDAS ==========
-  addSectionTitle("Movimentações Sugeridas");
+  // ════════════════════════════════════════════════════════════
+  //  MOVIMENTAÇÕES SUGERIDAS (5 colored columns)
+  // ════════════════════════════════════════════════════════════
+
+  sectionTitle("Movimentações Sugeridas:");
 
   const movGroups: Record<string, string[]> = {
-    sair: [],
-    reduzir: [],
-    manter: [],
-    aumentar: [],
-    entrar: [],
+    sair: [], reduzir: [], manter: [], aumentar: [], entrar: [],
   };
   for (const a of ativosAtuais) {
     const mov = a.movimentacao || "manter";
     if (movGroups[mov]) movGroups[mov].push(a.ticker);
   }
   for (const a of ativosSugeridos) {
-    if (a.movimentacao === "entrar") {
-      movGroups.entrar.push(a.ticker);
-    }
+    if (a.movimentacao === "entrar") movGroups.entrar.push(a.ticker);
   }
 
-  const colWidth = contentWidth / 5;
-  const movOrder = ["sair", "reduzir", "manter", "aumentar", "entrar"];
+  const colW = CW / 5;
+  const movOrder = ["sair", "reduzir", "manter", "aumentar", "entrar"] as const;
   const movLabels: Record<string, string> = {
-    sair: "SAIR",
-    reduzir: "REDUZIR",
-    manter: "MANTER",
-    aumentar: "AUMENTAR",
-    entrar: "ENTRAR",
+    sair: "SAIR", reduzir: "REDUZIR", manter: "MANTER",
+    aumentar: "AUMENTAR", entrar: "ENTRAR",
   };
 
-  checkPageBreak(30);
+  const maxTickers = Math.max(...Object.values(movGroups).map((g) => g.length), 1);
+  const headerH = 7;
+  const tickerH = 5;
+  const bodyH = maxTickers * tickerH + 4;
+  pageBreak(headerH + bodyH + 4);
 
-  // Headers
+  // Draw outer border
+  doc.setDrawColor(...C_BORDER);
+  doc.setLineWidth(0.18);
+  doc.rect(M, y, CW, headerH + bodyH);
+
+  // Column headers
   movOrder.forEach((mov, i) => {
-    const x = margin + i * colWidth;
-    const headerColor = MOV_HEADER_COLORS[mov];
-    doc.setFillColor(...headerColor);
-    doc.rect(x, y, colWidth - 1, 6, "F");
-    doc.setFontSize(7);
-    doc.setTextColor(255);
+    const x = M + i * colW;
+    doc.setFillColor(...MOV_HEADER_BG[mov]);
+    doc.rect(x, y, colW, headerH, "F");
+    // Vertical separator
+    if (i > 0) {
+      doc.setDrawColor(255, 255, 255);
+      doc.setLineWidth(0.3);
+      doc.line(x, y, x, y + headerH);
+    }
+    doc.setFontSize(9);
+    doc.setTextColor(255, 255, 255);
     doc.setFont("helvetica", "bold");
-    doc.text(`${movLabels[mov]} (${movGroups[mov].length})`, x + colWidth / 2 - 0.5, y + 4, { align: "center" });
+    doc.text(
+      `${movLabels[mov]} (${movGroups[mov].length})`,
+      x + colW / 2,
+      y + 5,
+      { align: "center" }
+    );
   });
-  y += 7;
 
-  // Content
-  const maxItems = Math.max(...Object.values(movGroups).map((g) => g.length), 1);
-  const cellHeight = 4.5;
+  const bodyY = y + headerH;
 
+  // Column bodies
   movOrder.forEach((mov, i) => {
-    const x = margin + i * colWidth;
-    const bgColor = MOV_COLORS[mov];
-    doc.setFillColor(...bgColor);
-    doc.rect(x, y, colWidth - 1, maxItems * cellHeight + 2, "F");
+    const x = M + i * colW;
+    doc.setFillColor(...MOV_CELL_BG[mov]);
+    doc.rect(x, bodyY, colW, bodyH, "F");
+    // Vertical borders
+    if (i > 0) {
+      doc.setDrawColor(...C_BORDER);
+      doc.setLineWidth(0.18);
+      doc.line(x, bodyY, x, bodyY + bodyH);
+    }
 
-    doc.setFontSize(7);
-    doc.setTextColor(60);
+    doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
-    movGroups[mov].forEach((ticker, j) => {
-      doc.text(ticker, x + 2, y + 4 + j * cellHeight);
-    });
-    if (movGroups[mov].length === 0) {
-      doc.setTextColor(150);
-      doc.text("—", x + 2, y + 4);
+    doc.setTextColor(...C_TEXT);
+    const tickers = movGroups[mov];
+    if (tickers.length === 0) {
+      doc.setTextColor(...C_FOOTER);
+      doc.text("—", x + colW / 2, bodyY + 5, { align: "center" });
+    } else {
+      tickers.forEach((ticker, j) => {
+        doc.text(ticker, x + colW / 2, bodyY + 5 + j * tickerH, { align: "center" });
+      });
     }
   });
 
-  y += maxItems * cellHeight + 8;
+  y = bodyY + bodyH + 10;
 
-  // ========== CONSIDERAÇÕES MOVIMENTAÇÕES ==========
+  // ════════════════════════════════════════════════════════════
+  //  CONSIDERAÇÕES MOVIMENTAÇÕES
+  // ════════════════════════════════════════════════════════════
+
   const ativosComMov = ativosAtuais.filter(
     (a) => a.movimentacao && a.movimentacao !== "manter"
   );
 
   if (ativosComMov.length > 0) {
-    addSectionTitle("Considerações sobre as Principais Movimentações");
-
-    for (const a of ativosComMov) {
-      const r = researchMap.get(a.ticker);
-      if (!r?.analise_texto) continue;
-
-      checkPageBreak(25);
-
-      // Ticker title - bold underlined
-      doc.setFontSize(9);
-      doc.setTextColor(30);
-      doc.setFont("helvetica", "bold");
-      const titleText = `${a.ticker} — ${r.nome_empresa}`;
-      doc.text(titleText, margin, y);
-      const titleWidth = doc.getTextWidth(titleText);
-      doc.setLineWidth(0.3);
-      doc.setDrawColor(30);
-      doc.line(margin, y + 0.5, margin + titleWidth, y + 0.5);
-      y += 5;
-
-      // Analysis text
-      doc.setFontSize(8);
-      doc.setTextColor(60);
-      doc.setFont("helvetica", "normal");
-
-      const lines = doc.splitTextToSize(r.analise_texto, contentWidth);
-
-      // Make last sentence bold
-      for (let i = 0; i < lines.length; i++) {
-        checkPageBreak(5);
-        if (i === lines.length - 1 || (i >= lines.length - 2 && lines[i].match(/[Ss]ugerimos|[Rr]ecomendamos|[Mm]antemos/))) {
-          doc.setFont("helvetica", "bold");
-        }
-        doc.text(lines[i], margin, y);
-        y += 3.5;
-      }
-      doc.setFont("helvetica", "normal");
-      y += 4;
-    }
+    sectionTitle("Considerações sobre as principais movimentações:");
+    renderAnalysis(ativosComMov);
   }
 
-  // ========== PORTFÓLIO SUGERIDO ==========
-  checkPageBreak(30);
-  addSectionTitle("Portfólio Sugerido");
+  // ════════════════════════════════════════════════════════════
+  //  PORTFÓLIO SUGERIDO (sem Movimentação)
+  // ════════════════════════════════════════════════════════════
+
+  pageBreak(30);
+  sectionTitle("Portfólio Sugerido:");
 
   const totalSugerido = ativosSugeridos.reduce((s, a) => s + a.valor_rs, 0);
 
   autoTable(doc, {
     startY: y,
-    margin: { left: margin, right: margin, top: 24 },
-    head: [["#", "Ticker", "Empresa", "Setor", "Valor R$", "Peso %", "ROE", "P/VPA", "P/L", "EV/EBITDA", "DY", "Mov."]],
+    margin: { left: M, right: M, top: tableTopMargin },
+    head: [["#", "Ticker", "Valor R$", "Peso", "Setor", "ROE", "P/VPA", "P/L", "EV/Ebitda", "Div. Yield"]],
     body: [
       ...ativosSugeridos.map((a, i) => {
         const r = researchMap.get(a.ticker);
         return [
           String(i + 1),
           a.ticker,
-          r?.nome_empresa || "—",
-          r?.setor || "—",
           fmtCurrency(a.valor_rs),
           a.peso.toFixed(2) + "%",
+          r?.setor || "—",
           fmt(r?.roe),
           fmt(r?.p_vpa),
           fmt(r?.p_l),
           fmt(r?.ev_ebitda),
           fmt(r?.div_yield),
-          (a.movimentacao || "manter").charAt(0).toUpperCase() + (a.movimentacao || "manter").slice(1),
         ];
       }),
       [
         "",
         { content: "Total", styles: { fontStyle: "bold" as const } },
-        "",
-        "",
         { content: fmtCurrency(totalSugerido), styles: { fontStyle: "bold" as const } },
         { content: "100.00%", styles: { fontStyle: "bold" as const } },
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
+        "", "", "", "", "", "",
       ],
     ],
-    styles: { fontSize: 7, cellPadding: 1.5, lineColor: [200, 200, 200], lineWidth: 0.2 },
-    headStyles: { fillColor: [245, 245, 245], textColor: [50, 50, 50], fontStyle: "bold", lineColor: [200, 200, 200] },
-    bodyStyles: { textColor: [60, 60, 60] },
+    styles: tableStyles,
+    headStyles: tableHeadStyles,
     columnStyles: {
-      0: { halign: "center", cellWidth: 6 },
-      4: { halign: "right" },
+      0: { halign: "center", cellWidth: 7 },
+      2: { halign: "right" },
+      3: { halign: "right" },
       5: { halign: "right" },
       6: { halign: "right" },
       7: { halign: "right" },
       8: { halign: "right" },
       9: { halign: "right" },
-      10: { halign: "right" },
     },
     didParseCell: (data) => {
-      if (data.section === "body" && data.column.index === 11 && data.row.index < ativosSugeridos.length) {
-        const mov = ativosSugeridos[data.row.index].movimentacao || "manter";
-        const color = MOV_COLORS[mov];
-        if (color) {
-          data.cell.styles.fillColor = color;
+      if (data.section === "body") {
+        const isTotal = data.row.index === ativosSugeridos.length;
+        if (!isTotal && data.row.index % 2 === 1) {
+          data.cell.styles.fillColor = C_ALT_ROW;
+        }
+        if (isTotal) {
+          data.cell.styles.fillColor = C_HEAD_BG;
         }
       }
     },
     didDrawPage: (data) => {
-      if (data.pageNumber > 1) addSubsequentPageHeader();
+      if (data.pageNumber > 1) drawPageHeader();
     },
   });
 
-  y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+  y = getLastTableY() + 3;
+  addTableNote();
 
-  // ========== CONSIDERAÇÕES RECOMENDAÇÕES (NOVOS) ==========
+  // ════════════════════════════════════════════════════════════
+  //  CONSIDERAÇÕES RECOMENDAÇÕES (novos ativos)
+  // ════════════════════════════════════════════════════════════
+
   const ativosNovos = ativosSugeridos.filter((a) => a.movimentacao === "entrar");
 
   if (ativosNovos.length > 0) {
-    addSectionTitle("Considerações sobre as Principais Recomendações");
-
-    for (const a of ativosNovos) {
-      const r = researchMap.get(a.ticker);
-      if (!r?.analise_texto) continue;
-
-      checkPageBreak(25);
-
-      doc.setFontSize(9);
-      doc.setTextColor(30);
-      doc.setFont("helvetica", "bold");
-      const titleText = `${a.ticker} — ${r.nome_empresa}`;
-      doc.text(titleText, margin, y);
-      const titleWidth = doc.getTextWidth(titleText);
-      doc.setLineWidth(0.3);
-      doc.setDrawColor(30);
-      doc.line(margin, y + 0.5, margin + titleWidth, y + 0.5);
-      y += 5;
-
-      doc.setFontSize(8);
-      doc.setTextColor(60);
-      doc.setFont("helvetica", "normal");
-
-      const lines = doc.splitTextToSize(r.analise_texto, contentWidth);
-      for (let i = 0; i < lines.length; i++) {
-        checkPageBreak(5);
-        if (i === lines.length - 1 || (i >= lines.length - 2 && lines[i].match(/[Ss]ugerimos|[Rr]ecomendamos|[Mm]antemos/))) {
-          doc.setFont("helvetica", "bold");
-        }
-        doc.text(lines[i], margin, y);
-        y += 3.5;
-      }
-      doc.setFont("helvetica", "normal");
-      y += 4;
-    }
+    sectionTitle("Considerações sobre as principais recomendações:");
+    renderAnalysis(ativosNovos);
   }
 
-  // ========== DISCLAIMER CVM ==========
-  checkPageBreak(25);
-  y += 5;
-  doc.setDrawColor(200);
-  doc.setLineWidth(0.3);
-  doc.line(margin, y, margin + contentWidth, y);
-  y += 5;
+  // ════════════════════════════════════════════════════════════
+  //  DISCLAIMER CVM (última página)
+  // ════════════════════════════════════════════════════════════
 
-  doc.setFontSize(6.5);
-  doc.setTextColor(130);
+  pageBreak(28);
+  y += 4;
+  doc.setDrawColor(...C_BORDER);
+  doc.setLineWidth(0.18);
+  doc.line(M, y, W - M, y);
+  y += 4;
+
+  doc.setFontSize(7);
+  doc.setTextColor(...C_FOOTER);
   doc.setFont("helvetica", "italic");
   const disclaimer =
     "Este relatório tem caráter meramente informativo e não constitui oferta, solicitação ou recomendação de compra ou venda de valores mobiliários. " +
@@ -479,17 +596,36 @@ export async function exportRelatorioPDF(
     "O investidor deve tomar suas decisões de investimento de forma independente, considerando seus objetivos, situação financeira e tolerância a risco. " +
     "Este material está em conformidade com as normas da Comissão de Valores Mobiliários (CVM).";
 
-  const disclaimerLines = doc.splitTextToSize(disclaimer, contentWidth);
+  const disclaimerLines: string[] = doc.splitTextToSize(disclaimer, CW);
   for (const line of disclaimerLines) {
-    checkPageBreak(4);
-    doc.text(line, margin, y);
+    pageBreak(3.5);
+    doc.text(line, M, y);
     y += 3;
   }
 
-  // Add page numbers
-  addPageNumber();
+  // ════════════════════════════════════════════════════════════
+  //  FOOTER — page numbers + bottom line (all pages)
+  // ════════════════════════════════════════════════════════════
 
-  // Save
+  const pageCount = (
+    doc as unknown as { internal: { getNumberOfPages: () => number } }
+  ).internal.getNumberOfPages();
+
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    // Bottom line
+    doc.setDrawColor(...C_BORDER);
+    doc.setLineWidth(0.18);
+    doc.line(M, H - 12, W - M, H - 12);
+    // Page number
+    doc.setFontSize(8);
+    doc.setTextColor(...C_FOOTER);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Página ${i} de ${pageCount}`, W / 2, H - 8, { align: "center" });
+  }
+
+  // ── Save ──────────────────────────────────────────────────
+
   const dateStr = new Date(relatorio.created_at).toISOString().split("T")[0];
   doc.save(`relatorio_${relatorio.nome_cliente.replace(/\s+/g, "_")}_${dateStr}.pdf`);
 }

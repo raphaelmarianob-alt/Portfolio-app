@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
 
 const links = [
@@ -41,7 +40,7 @@ export function Sidebar() {
     <aside className="fixed left-0 top-0 bottom-0 w-[250px] bg-[#0d0e14] border-r border-[#1e2030] flex flex-col z-10">
       {/* Logo */}
       <div className="h-16 flex items-center px-6 border-b border-[#1e2030]">
-        <Image src="/logo.png" alt="Nord Wealth" width={160} height={40} className="h-10 w-auto" priority />
+        <img src="/logo.svg" alt="Nord Wealth" className="h-10" />
       </div>
 
       {/* Navigation */}
