@@ -169,10 +169,10 @@ export async function exportRelatorioPDF(
     if (w > 56) { w = 56; h = w / ar; }
     return { w, h };
   };
-  const logo1 = fitLogo(16);  // page 1 (45px)
-  const logo2 = fitLogo(12);  // pages 2+
+  const logo1 = fitLogo(11);  // page 1 (32px)
+  const logo2 = fitLogo(11);  // pages 2+
 
-  const HEADER_H1 = 28;  // ~80px
+  const HEADER_H1 = 18;  // ~50px
   const HEADER_H2 = 18;
   const LH_BODY = 5.3;
   const LOGO_PAD = 3.5;
@@ -354,12 +354,11 @@ export async function exportRelatorioPDF(
   doc.setFillColor(...C_BG);
   doc.rect(0, 0, W, HEADER_H1, "F");
 
-  // Title — 22pt bold white, letter-spacing simulated with char spacing
+  // Title — 22pt bold white
   doc.setFontSize(22);
   doc.setTextColor(...C_TEXT);
   doc.setFont("helvetica", "bold");
-  const title = "ANÁLISE DE PORTFÓLIO";
-  doc.text(title, M, 14, { charSpace: 1.2 });
+  doc.text("Análise de Portfólio", M, 12);
 
   // Metadata line
   doc.setFontSize(9);
@@ -367,7 +366,7 @@ export async function exportRelatorioPDF(
   doc.setFont("helvetica", "normal");
   doc.text(
     `${formatDateBR(relatorio.created_at)}  ·  ${relatorio.nome_cliente}  ·  ${relatorio.objetivo}  ·  ${relatorio.pct_pl_acoes}% PL  ·  ${fmtCurrency(relatorio.valor_total)}`,
-    M, 20
+    M, 17
   );
 
   // Logo right-aligned
