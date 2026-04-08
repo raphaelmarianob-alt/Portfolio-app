@@ -57,32 +57,45 @@ function formatDateBR(dateStr: string): string {
   return `${d.getDate()} de ${MESES[d.getMonth()]} de ${d.getFullYear()}`;
 }
 
-// ── Colors (RGB tuples) ─────────────────────────────────────
+// ── Dark palette (RGB) ──────────────────────────────────────
 
 type RGB = [number, number, number];
 
-const C_TEXT: RGB = [26, 26, 26];         // #1a1a1a
-const C_DATE: RGB = [85, 85, 85];         // #555555
-const C_BORDER: RGB = [204, 204, 204];    // #cccccc
-const C_NAVY: RGB = [13, 27, 42];         // #0d1b2a
-const C_ALT_ROW: RGB = [248, 249, 250];   // #f8f9fa
-const C_FOOTER: RGB = [136, 136, 136];    // #888888
-const C_HEADER_DATE: RGB = [160, 174, 192]; // #a0aec0
+const C_BG:      RGB = [6, 13, 26];       // #060d1a  — page background
+const C_CARD:    RGB = [13, 27, 42];       // #0d1b2a  — cards / alt row dark
+const C_ZEBRA:   RGB = [26, 39, 68];       // #1a2744  — zebra stripe / header
+const C_TEXT:    RGB = [240, 244, 248];     // #f0f4f8  — primary text
+const C_SEC:     RGB = [143, 163, 188];     // #8fa3bc  — secondary text
+const C_MUTED:   RGB = [74, 96, 128];       // #4a6080  — muted / footer
+const C_ACCENT:  RGB = [74, 144, 217];      // #4a90d9  — accent blue
+const C_SILVER:  RGB = [200, 214, 229];     // #c8d6e5  — silver / table header text
 
+// Horizontal line between rows: very subtle blue
+const C_ROW_LINE: RGB = [74, 144, 217];     // drawn at low opacity via workaround
+
+// Badge colors — dark bg + colored border + colored text
 const MOV_BADGE: Record<string, { bg: RGB; text: RGB; border: RGB }> = {
-  sair:     { bg: [248, 215, 218], text: [114, 28, 36],  border: [114, 28, 36] },   // #f8d7da / #721c24
-  reduzir:  { bg: [255, 243, 205], text: [133, 100, 4],  border: [133, 100, 4] },   // #fff3cd / #856404
-  manter:   { bg: [248, 249, 250], text: [108, 117, 125], border: [108, 117, 125] }, // #f8f9fa / #6c757d
-  aumentar: { bg: [212, 237, 218], text: [21, 87, 36],   border: [21, 87, 36] },    // #d4edda / #155724
-  entrar:   { bg: [209, 236, 241], text: [12, 84, 96],   border: [12, 84, 96] },    // #d1ecf1 / #0c5460
+  sair:     { bg: [40, 15, 18],  text: [255, 107, 107], border: [220, 53, 69] },
+  reduzir:  { bg: [35, 30, 10],  text: [255, 193, 7],   border: [234, 165, 12] },
+  manter:   { bg: [20, 25, 35],  text: [143, 163, 188],  border: [74, 96, 128] },
+  aumentar: { bg: [10, 35, 20],  text: [92, 214, 92],   border: [40, 167, 69] },
+  entrar:   { bg: [10, 25, 45],  text: [77, 166, 255],  border: [37, 99, 235] },
 };
 
+// Movimentações table — header gradient colors (dark)
+const MOV_COL: Record<string, { top: RGB; main: RGB; text: RGB }> = {
+  sair:     { top: [120, 30, 35],  main: [60, 15, 20],   text: [255, 107, 107] },
+  reduzir:  { top: [30, 60, 120],  main: [15, 30, 60],   text: [77, 166, 255] },
+  manter:   { top: [30, 50, 90],   main: [15, 25, 50],   text: [143, 163, 188] },
+  aumentar: { top: [20, 80, 45],   main: [10, 40, 22],   text: [92, 214, 92] },
+  entrar:   { top: [15, 50, 110],  main: [8, 25, 55],    text: [77, 166, 255] },
+};
 
 // ── Logo loader (SVG → PNG via canvas) ──────────────────────
 
 interface LogoData {
   base64: string;
-  aspectRatio: number; // width / height
+  aspectRatio: number;
 }
 
 async function loadLogoBase64(): Promise<LogoData | null> {
@@ -102,12 +115,29 @@ async function loadLogoBase64(): Promise<LogoData | null> {
         if (!ctx) { resolve(null); return; }
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         URL.revokeObjectURL(url);
-        const aspectRatio = img.naturalWidth / img.naturalHeight;
-        resolve({ base64: canvas.toDataURL("image/png"), aspectRatio });
+        resolve({ base64: canvas.toDataURL("image/png"), aspectRatio: img.naturalWidth / img.naturalHeight });
       };
       img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
       img.src = url;
     });
+  } catch {
+    return null;
+  }
+}
+
+// Watermark logo at 3% opacity (white version via canvas manipulation)
+function makeWatermarkLogo(logoData: LogoData): string | null {
+  try {
+    const img = document.createElement("img");
+    img.src = logoData.base64;
+    const canvas = document.createElement("canvas");
+    canvas.width = 400;
+    canvas.height = Math.round(400 / logoData.aspectRatio);
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.globalAlpha = 0.03;
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/png");
   } catch {
     return null;
   }
@@ -124,48 +154,72 @@ export async function exportRelatorioPDF(
   const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
   const W = doc.internal.pageSize.getWidth();   // 210
   const H = doc.internal.pageSize.getHeight();  // 297
-  const M = 14;                                 // 40px ≈ 14mm
-  const CW = W - M * 2;                        // content width
+  const M = 14;
+  const CW = W - M * 2;
   let y = M;
 
   const logoData = await loadLogoBase64();
+  const watermark = logoData ? makeWatermarkLogo(logoData) : null;
 
-  // Logo: max 160px (≈56mm) wide, 45px (≈16mm) tall — preserve aspect ratio
-  const MAX_LOGO_W = 56;  // 160px ≈ 56mm
-  const MAX_LOGO_H1 = 16; // 45px ≈ 16mm (page 1)
-  const MAX_LOGO_H2 = 12; // 35px ≈ 12mm (page 2+)
+  // Logo fit helper — max 56mm wide, preserve aspect ratio
   const ar = logoData?.aspectRatio ?? 2.5;
-
-  // Fit within bounds: try height-first, clamp width
   const fitLogo = (maxH: number) => {
     let h = maxH;
     let w = h * ar;
-    if (w > MAX_LOGO_W) { w = MAX_LOGO_W; h = w / ar; }
+    if (w > 56) { w = 56; h = w / ar; }
     return { w, h };
   };
-  const logo1 = fitLogo(MAX_LOGO_H1);
-  const logo2 = fitLogo(MAX_LOGO_H2);
+  const logo1 = fitLogo(16);  // page 1 (45px)
+  const logo2 = fitLogo(12);  // pages 2+
 
-  // Full-width navy header bar
-  const HEADER_H1 = 25;  // 70px ≈ 25mm (page 1)
-  const HEADER_H2 = 18;  // smaller for subsequent pages
+  const HEADER_H1 = 28;  // ~80px
+  const HEADER_H2 = 18;
+  const LH_BODY = 5.3;
+  const LOGO_PAD = 3.5;
 
-  // Line heights
-  const LH_BODY = 5.3;    // 10pt * 1.5 line-height ≈ 5.3mm
+  // ── Fill page background ──────────────────────────────────
 
-  // ── Subsequent page header (pages 2+) ─────────────────────
+  const fillPageBg = () => {
+    doc.setFillColor(...C_BG);
+    doc.rect(0, 0, W, H, "F");
+  };
 
-  const LOGO_PAD = 3.5; // 10px ≈ 3.5mm padding inside navy bar
+  // ── Draw watermark centered on page ───────────────────────
+
+  const drawWatermark = () => {
+    if (!watermark) return;
+    const wmW = 80;
+    const wmH = wmW / ar;
+    doc.addImage(watermark, "PNG", (W - wmW) / 2, (H - wmH) / 2, wmW, wmH, undefined, "FAST");
+  };
+
+  // ── Accent gradient line below header ─────────────────────
+
+  const drawAccentLine = (atY: number) => {
+    const steps = 40;
+    const stepW = W / steps;
+    for (let i = 0; i < steps; i++) {
+      const t = i / steps;
+      const r = Math.round(C_ACCENT[0] * (1 - t * 0.6));
+      const g = Math.round(C_ACCENT[1] * (1 - t * 0.4));
+      const b = Math.round(C_ACCENT[2] * (1 - t * 0.2));
+      doc.setFillColor(r, g, b);
+      doc.rect(i * stepW, atY, stepW + 0.5, 0.7, "F");
+    }
+  };
+
+  // ── Page header (pages 2+) ────────────────────────────────
 
   const drawPageHeader = () => {
-    // Full-width navy bar
-    doc.setFillColor(...C_NAVY);
+    fillPageBg();
+    drawWatermark();
+    doc.setFillColor(...C_BG);
     doc.rect(0, 0, W, HEADER_H2, "F");
-    // Logo right-aligned inside the bar with 10px padding
     if (logoData) {
-      const logoY = (HEADER_H2 - logo2.h) / 2;
-      doc.addImage(logoData.base64, "PNG", W - LOGO_PAD - logo2.w, logoY, logo2.w, logo2.h, undefined, "FAST");
+      const ly = (HEADER_H2 - logo2.h) / 2;
+      doc.addImage(logoData.base64, "PNG", W - LOGO_PAD - logo2.w, ly, logo2.w, logo2.h, undefined, "FAST");
     }
+    drawAccentLine(HEADER_H2);
   };
 
   // ── Page break ────────────────────────────────────────────
@@ -174,22 +228,22 @@ export async function exportRelatorioPDF(
     if (y + needed > H - 18) {
       doc.addPage();
       drawPageHeader();
-      y = HEADER_H2 + 5;
+      y = HEADER_H2 + 4;
     }
   };
 
-  // ── Section title (13pt, bold, underlined) ────────────────
+  // ── Section title — left accent bar ───────────────────────
 
   const sectionTitle = (title: string) => {
     pageBreak(16);
+    // Left accent bar 3px
+    doc.setFillColor(...C_ACCENT);
+    doc.rect(M, y - 4, 1, 6, "F");
+    // Title text
     doc.setFontSize(13);
     doc.setTextColor(...C_TEXT);
     doc.setFont("helvetica", "bold");
-    doc.text(title, M, y);
-    const tw = doc.getTextWidth(title);
-    doc.setDrawColor(...C_TEXT);
-    doc.setLineWidth(0.3);
-    doc.line(M, y + 1, M + tw, y + 1);
+    doc.text(title.toUpperCase(), M + 4, y);
     y += 8;
   };
 
@@ -197,7 +251,7 @@ export async function exportRelatorioPDF(
 
   const addTableNote = () => {
     doc.setFontSize(7);
-    doc.setTextColor(...C_NAVY);
+    doc.setTextColor(...C_MUTED);
     doc.setFont("helvetica", "italic");
     doc.text("Recomendação Nord Research.", M, y);
     y += 6;
@@ -205,20 +259,22 @@ export async function exportRelatorioPDF(
 
   // ── autoTable shared config ───────────────────────────────
 
-  const tableTopMargin = HEADER_H2 + 5;
+  const tableTopMargin = HEADER_H2 + 4;
   const tableStyles = {
-    fontSize: 9,
-    cellPadding: 1.4,       // 4px ≈ 1.4mm
-    lineColor: C_BORDER,
-    lineWidth: 0.18,        // 0.5px ≈ 0.18mm
-    textColor: C_TEXT,
+    fontSize: 8,
+    cellPadding: 1.6,
+    lineColor: C_ROW_LINE,
+    lineWidth: 0.08,
+    textColor: C_SEC,
+    fillColor: C_BG,
   };
   const tableHeadStyles = {
-    fillColor: C_NAVY,
-    textColor: [255, 255, 255] as RGB,
+    fillColor: C_ZEBRA,
+    textColor: C_SILVER,
     fontStyle: "bold" as const,
-    lineColor: C_NAVY,
-    fontSize: 9,
+    lineColor: C_ZEBRA,
+    fontSize: 7,
+    cellPadding: 1.8,
   };
   const getLastTableY = () =>
     (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY;
@@ -226,99 +282,117 @@ export async function exportRelatorioPDF(
   // ── Analysis section renderer ─────────────────────────────
 
   const renderAnalysis = (ativos: AtivoRelatorio[]) => {
-    for (const a of ativos) {
+    for (let ai = 0; ai < ativos.length; ai++) {
+      const a = ativos[ai];
       const r = researchMap.get(a.ticker);
       if (!r?.analise_texto) continue;
 
       pageBreak(22);
 
-      // "- Nome Empresa (TICKER):" bold + underlined, 10pt
+      // Left accent bar + title
+      doc.setFillColor(...C_ACCENT);
+      doc.rect(M, y - 4, 1, 6, "F");
       doc.setFontSize(10);
       doc.setTextColor(...C_TEXT);
       doc.setFont("helvetica", "bold");
-      const label = `- ${r.nome_empresa} (${a.ticker}):`;
-      doc.text(label, M, y);
-      const labelW = doc.getTextWidth(label);
-      doc.setDrawColor(...C_TEXT);
-      doc.setLineWidth(0.3);
-      doc.line(M, y + 0.8, M + labelW, y + 0.8);
+      doc.text(`${r.nome_empresa} (${a.ticker})`, M + 4, y);
       y += 6;
 
-      // Body text 10pt, line-height 1.5
-      doc.setFontSize(10);
-      doc.setTextColor(...C_TEXT);
+      // Body text
+      doc.setFontSize(9);
       doc.setFont("helvetica", "normal");
-      const lines: string[] = doc.splitTextToSize(r.analise_texto, CW - 4);
+      const lines: string[] = doc.splitTextToSize(r.analise_texto, CW - 8);
 
       for (let i = 0; i < lines.length; i++) {
         pageBreak(LH_BODY);
-        // Last line(s) bold
-        if (
+        // Last line bold + bright
+        if (i === lines.length - 1 || (
           i >= lines.length - 2 &&
           lines[i].match(/[Ss]ugerimos|[Rr]ecomendamos|[Mm]antemos|[Cc]onclu/)
-        ) {
+        )) {
           doc.setFont("helvetica", "bold");
-        } else if (i === lines.length - 1) {
-          doc.setFont("helvetica", "bold");
+          doc.setTextColor(...C_TEXT);
+        } else {
+          doc.setFont("helvetica", "normal");
+          doc.setTextColor(...C_SEC);
         }
-        doc.text(lines[i], M + 3, y);
+        doc.text(lines[i], M + 4, y);
         y += LH_BODY;
       }
       doc.setFont("helvetica", "normal");
-      y += 4.2; // 12px spacing between analyses
+
+      // Gradient separator between analyses
+      if (ai < ativos.length - 1) {
+        y += 3;
+        const sepSteps = 30;
+        const sepW = CW / sepSteps;
+        for (let s = 0; s < sepSteps; s++) {
+          const t = s / sepSteps;
+          const fade = Math.abs(t - 0.5) * 2; // 1→0→1
+          const alpha = 1 - fade;
+          const r2 = Math.round(C_ACCENT[0] * alpha + C_BG[0] * (1 - alpha));
+          const g2 = Math.round(C_ACCENT[1] * alpha + C_BG[1] * (1 - alpha));
+          const b2 = Math.round(C_ACCENT[2] * alpha + C_BG[2] * (1 - alpha));
+          doc.setFillColor(r2, g2, b2);
+          doc.rect(M + s * sepW, y, sepW + 0.5, 0.3, "F");
+        }
+        y += 5;
+      } else {
+        y += 4;
+      }
     }
   };
 
   // ════════════════════════════════════════════════════════════
-  //  PAGE 1 HEADER
+  //  PAGE 1
   // ════════════════════════════════════════════════════════════
 
-  // Full-width navy header bar
-  doc.setFillColor(...C_NAVY);
+  fillPageBg();
+  drawWatermark();
+
+  // Header bar
+  doc.setFillColor(...C_BG);
   doc.rect(0, 0, W, HEADER_H1, "F");
 
-  // Title — 22pt, bold, white, inside the navy bar
+  // Title — 22pt bold white, letter-spacing simulated with char spacing
   doc.setFontSize(22);
-  doc.setTextColor(255, 255, 255);
+  doc.setTextColor(...C_TEXT);
   doc.setFont("helvetica", "bold");
-  doc.text("Análise de Portfólio", M, 12);
+  const title = "ANÁLISE DE PORTFÓLIO";
+  doc.text(title, M, 14, { charSpace: 1.2 });
 
-  // Date — 11pt, light gray, below title inside the bar
-  doc.setFontSize(11);
-  doc.setTextColor(...C_HEADER_DATE);
-  doc.setFont("helvetica", "normal");
-  doc.text(formatDateBR(relatorio.created_at), M, 18);
-
-  // Logo right-aligned inside the navy bar with 10px padding
-  if (logoData) {
-    const logoY = (HEADER_H1 - logo1.h) / 2;
-    doc.addImage(logoData.base64, "PNG", W - LOGO_PAD - logo1.w, logoY, logo1.w, logo1.h, undefined, "FAST");
-  }
-
-  y = HEADER_H1 + 5;
-
-  // Info line
-  doc.setFontSize(10);
-  doc.setTextColor(...C_DATE);
+  // Metadata line
+  doc.setFontSize(9);
+  doc.setTextColor(...C_SEC);
   doc.setFont("helvetica", "normal");
   doc.text(
-    `${relatorio.nome_cliente}  ·  Objetivo: ${relatorio.objetivo}  ·  % PL em Ações: ${relatorio.pct_pl_acoes}%  ·  Valor Total: ${fmtCurrency(relatorio.valor_total)}`,
-    M, y
+    `${formatDateBR(relatorio.created_at)}  ·  ${relatorio.nome_cliente}  ·  ${relatorio.objetivo}  ·  ${relatorio.pct_pl_acoes}% PL  ·  ${fmtCurrency(relatorio.valor_total)}`,
+    M, 20
   );
-  y += 10;
+
+  // Logo right-aligned
+  if (logoData) {
+    const ly = (HEADER_H1 - logo1.h) / 2;
+    doc.addImage(logoData.base64, "PNG", W - LOGO_PAD - logo1.w, ly, logo1.w, logo1.h, undefined, "FAST");
+  }
+
+  // Accent gradient line below header
+  drawAccentLine(HEADER_H1);
+
+  y = HEADER_H1 + 6;
 
   // ════════════════════════════════════════════════════════════
   //  PORTFÓLIO ATUAL
   // ════════════════════════════════════════════════════════════
 
-  sectionTitle("Portfólio Atual:");
+  sectionTitle("Portfólio Atual");
 
   const totalAtual = ativosAtuais.reduce((s, a) => s + a.valor_rs, 0);
 
   autoTable(doc, {
     startY: y,
     margin: { left: M, right: M, top: tableTopMargin },
-    head: [["#", "Ticker", "Valor R$", "Peso", "Setor", "ROE", "P/VPA", "P/L", "EV/Ebitda", "Div. Yield", "Movimentação"]],
+    head: [["#", "TICKER", "VALOR R$", "PESO", "SETOR", "ROE", "P/VPA", "P/L", "EV/EBITDA", "DIV. YIELD", "MOV."]],
     body: [
       ...ativosAtuais.map((a, i) => {
         const r = researchMap.get(a.ticker);
@@ -339,7 +413,7 @@ export async function exportRelatorioPDF(
       // Total row
       [
         "",
-        { content: "Total", styles: { fontStyle: "bold" as const } },
+        { content: "TOTAL", styles: { fontStyle: "bold" as const } },
         { content: fmtCurrency(totalAtual), styles: { fontStyle: "bold" as const } },
         { content: "100.00%", styles: { fontStyle: "bold" as const } },
         "", "", "", "", "", "", "",
@@ -349,6 +423,7 @@ export async function exportRelatorioPDF(
     headStyles: tableHeadStyles,
     columnStyles: {
       0: { halign: "center", cellWidth: 7 },
+      1: { textColor: C_TEXT, fontStyle: "bold" },
       2: { halign: "right" },
       3: { halign: "right" },
       5: { halign: "right" },
@@ -356,20 +431,19 @@ export async function exportRelatorioPDF(
       7: { halign: "right" },
       8: { halign: "right" },
       9: { halign: "right" },
-      10: { halign: "center", cellWidth: 22 },
+      10: { halign: "center", cellWidth: 20 },
     },
-    // Alternating row colors + movimentação badge + total row bg
     didParseCell: (data) => {
       if (data.section === "body") {
         const isTotal = data.row.index === ativosAtuais.length;
-        // Alternating rows
-        if (!isTotal && data.row.index % 2 === 1) {
-          data.cell.styles.fillColor = C_ALT_ROW;
+        // Alternating dark rows
+        if (!isTotal) {
+          data.cell.styles.fillColor = data.row.index % 2 === 0 ? C_BG : C_CARD;
         }
         // Total row
         if (isTotal) {
-          data.cell.styles.fillColor = C_NAVY;
-          data.cell.styles.textColor = [255, 255, 255] as RGB;
+          data.cell.styles.fillColor = C_ZEBRA;
+          data.cell.styles.textColor = C_TEXT;
         }
         // Movimentação badge
         if (data.column.index === 10 && !isTotal) {
@@ -379,7 +453,7 @@ export async function exportRelatorioPDF(
           data.cell.styles.textColor = badge.text;
           data.cell.styles.fontStyle = "bold";
           data.cell.styles.lineColor = badge.border;
-          data.cell.styles.lineWidth = 0.18;
+          data.cell.styles.lineWidth = 0.3;
         }
       }
     },
@@ -392,10 +466,10 @@ export async function exportRelatorioPDF(
   addTableNote();
 
   // ════════════════════════════════════════════════════════════
-  //  MOVIMENTAÇÕES SUGERIDAS (5 colored columns)
+  //  MOVIMENTAÇÕES SUGERIDAS
   // ════════════════════════════════════════════════════════════
 
-  sectionTitle("Movimentações Sugeridas:");
+  sectionTitle("Movimentações Sugeridas");
 
   const movGroups: Record<string, string[]> = {
     sair: [], reduzir: [], manter: [], aumentar: [], entrar: [],
@@ -415,85 +489,60 @@ export async function exportRelatorioPDF(
     aumentar: "AUMENTAR", entrar: "ENTRAR",
   };
 
-  // Colors: header bg + thin top bar
-  const MOV_COL_HEADER: Record<string, RGB> = {
-    sair:     [220, 53, 69],   // #dc3545
-    reduzir:  [0, 102, 204],   // #0066cc
-    manter:   [0, 102, 204],   // #0066cc
-    aumentar: [0, 102, 204],   // #0066cc
-    entrar:   [40, 167, 69],   // #28a745
-  };
-  const MOV_COL_BAR: Record<string, RGB> = {
-    sair:     [255, 107, 107], // #ff6b6b
-    reduzir:  [77, 166, 255],  // #4da6ff
-    manter:   [77, 166, 255],  // #4da6ff
-    aumentar: [77, 166, 255],  // #4da6ff
-    entrar:   [92, 214, 92],   // #5cd65c
-  };
-
   const maxTickers = Math.max(...Object.values(movGroups).map((g) => g.length), 1);
-  const topBarH = 1;           // 3px ≈ 1mm
-  const headerH = 7;           // header text area
-  const tickerH = 6.35;        // 18px ≈ 6.35mm
-  const totalH = topBarH + headerH + maxTickers * tickerH;
+  const headerH = 8;
+  const tickerH = 6.35;
+  const totalH = headerH + maxTickers * tickerH;
   pageBreak(totalH + 6);
-
-  // Outer border
-  doc.setDrawColor(...C_BORDER);
-  doc.setLineWidth(0.18);
-  doc.rect(M, y, CW, totalH);
 
   movOrder.forEach((mov, i) => {
     const x = M + i * colW;
+    const c = MOV_COL[mov];
 
-    // ── Top color bar (thin accent) ──
-    doc.setFillColor(...MOV_COL_BAR[mov]);
-    doc.rect(x, y, colW, topBarH, "F");
-
-    // ── Header background ──
-    doc.setFillColor(...MOV_COL_HEADER[mov]);
-    doc.rect(x, y + topBarH, colW, headerH, "F");
+    // Header — gradient effect: top strip + main
+    doc.setFillColor(...c.top);
+    doc.rect(x, y, colW, 2, "F");
+    doc.setFillColor(...c.main);
+    doc.rect(x, y + 2, colW, headerH - 2, "F");
 
     // Header text
-    doc.setFontSize(10);
-    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(8);
+    doc.setTextColor(...c.text);
     doc.setFont("helvetica", "bold");
     doc.text(
       `${movLabels[mov]} (${movGroups[mov].length})`,
-      x + colW / 2,
-      y + topBarH + 5,
+      x + colW / 2, y + 6,
       { align: "center" }
     );
 
-    // ── Ticker rows (white bg, bottom border) ──
-    const rowsY = y + topBarH + headerH;
+    // Ticker rows
+    const rowsY = y + headerH;
     const tickers = movGroups[mov];
 
     for (let j = 0; j < maxTickers; j++) {
       const ry = rowsY + j * tickerH;
 
-      // White background
-      doc.setFillColor(255, 255, 255);
+      // Dark bg alternating
+      doc.setFillColor(...(j % 2 === 0 ? C_BG : C_CARD));
       doc.rect(x, ry, colW, tickerH, "F");
 
-      // Bottom border
-      doc.setDrawColor(224, 224, 224); // #e0e0e0
-      doc.setLineWidth(0.1);
+      // Subtle horizontal line
+      doc.setDrawColor(...C_ACCENT);
+      doc.setLineWidth(0.05);
       doc.line(x, ry + tickerH, x + colW, ry + tickerH);
 
-      // Ticker text (or empty)
       if (j < tickers.length) {
         doc.setFontSize(9);
-        doc.setTextColor(...C_TEXT);
+        doc.setTextColor(...C_SILVER);
         doc.setFont("helvetica", "normal");
         doc.text(tickers[j], x + colW / 2, ry + tickerH / 2 + 1.2, { align: "center" });
       }
     }
 
-    // Vertical column separator
+    // Subtle vertical separator (no hard borders)
     if (i > 0) {
-      doc.setDrawColor(...C_BORDER);
-      doc.setLineWidth(0.18);
+      doc.setDrawColor(...C_ACCENT);
+      doc.setLineWidth(0.05);
       doc.line(x, y, x, y + totalH);
     }
   });
@@ -509,23 +558,23 @@ export async function exportRelatorioPDF(
   );
 
   if (ativosComMov.length > 0) {
-    sectionTitle("Considerações sobre as principais movimentações:");
+    sectionTitle("Considerações sobre as principais movimentações");
     renderAnalysis(ativosComMov);
   }
 
   // ════════════════════════════════════════════════════════════
-  //  PORTFÓLIO SUGERIDO (sem Movimentação)
+  //  PORTFÓLIO SUGERIDO
   // ════════════════════════════════════════════════════════════
 
   pageBreak(30);
-  sectionTitle("Portfólio Sugerido:");
+  sectionTitle("Portfólio Sugerido");
 
   const totalSugerido = ativosSugeridos.reduce((s, a) => s + a.valor_rs, 0);
 
   autoTable(doc, {
     startY: y,
     margin: { left: M, right: M, top: tableTopMargin },
-    head: [["#", "Ticker", "Valor R$", "Peso", "Setor", "ROE", "P/VPA", "P/L", "EV/Ebitda", "Div. Yield"]],
+    head: [["#", "TICKER", "VALOR R$", "PESO", "SETOR", "ROE", "P/VPA", "P/L", "EV/EBITDA", "DIV. YIELD"]],
     body: [
       ...ativosSugeridos.map((a, i) => {
         const r = researchMap.get(a.ticker);
@@ -544,7 +593,7 @@ export async function exportRelatorioPDF(
       }),
       [
         "",
-        { content: "Total", styles: { fontStyle: "bold" as const } },
+        { content: "TOTAL", styles: { fontStyle: "bold" as const } },
         { content: fmtCurrency(totalSugerido), styles: { fontStyle: "bold" as const } },
         { content: "100.00%", styles: { fontStyle: "bold" as const } },
         "", "", "", "", "", "",
@@ -554,6 +603,7 @@ export async function exportRelatorioPDF(
     headStyles: tableHeadStyles,
     columnStyles: {
       0: { halign: "center", cellWidth: 7 },
+      1: { textColor: C_TEXT, fontStyle: "bold" },
       2: { halign: "right" },
       3: { halign: "right" },
       5: { halign: "right" },
@@ -565,12 +615,12 @@ export async function exportRelatorioPDF(
     didParseCell: (data) => {
       if (data.section === "body") {
         const isTotal = data.row.index === ativosSugeridos.length;
-        if (!isTotal && data.row.index % 2 === 1) {
-          data.cell.styles.fillColor = C_ALT_ROW;
+        if (!isTotal) {
+          data.cell.styles.fillColor = data.row.index % 2 === 0 ? C_BG : C_CARD;
         }
         if (isTotal) {
-          data.cell.styles.fillColor = C_NAVY;
-          data.cell.styles.textColor = [255, 255, 255] as RGB;
+          data.cell.styles.fillColor = C_ZEBRA;
+          data.cell.styles.textColor = C_TEXT;
         }
       }
     },
@@ -589,23 +639,34 @@ export async function exportRelatorioPDF(
   const ativosNovos = ativosSugeridos.filter((a) => a.movimentacao === "entrar");
 
   if (ativosNovos.length > 0) {
-    sectionTitle("Considerações sobre as principais recomendações:");
+    sectionTitle("Considerações sobre as principais recomendações");
     renderAnalysis(ativosNovos);
   }
 
   // ════════════════════════════════════════════════════════════
-  //  DISCLAIMER CVM (última página)
+  //  DISCLAIMER CVM
   // ════════════════════════════════════════════════════════════
 
   pageBreak(28);
   y += 4;
-  doc.setDrawColor(...C_BORDER);
-  doc.setLineWidth(0.18);
-  doc.line(M, y, W - M, y);
+
+  // Gradient separator
+  const sepSteps = 40;
+  const sepW = CW / sepSteps;
+  for (let s = 0; s < sepSteps; s++) {
+    const t = s / sepSteps;
+    const fade = Math.abs(t - 0.5) * 2;
+    const alpha = 1 - fade;
+    const r2 = Math.round(C_MUTED[0] * alpha + C_BG[0] * (1 - alpha));
+    const g2 = Math.round(C_MUTED[1] * alpha + C_BG[1] * (1 - alpha));
+    const b2 = Math.round(C_MUTED[2] * alpha + C_BG[2] * (1 - alpha));
+    doc.setFillColor(r2, g2, b2);
+    doc.rect(M + s * sepW, y, sepW + 0.5, 0.3, "F");
+  }
   y += 4;
 
   doc.setFontSize(7);
-  doc.setTextColor(...C_FOOTER);
+  doc.setTextColor(...C_MUTED);
   doc.setFont("helvetica", "italic");
   const disclaimer =
     "Este relatório tem caráter meramente informativo e não constitui oferta, solicitação ou recomendação de compra ou venda de valores mobiliários. " +
@@ -622,7 +683,7 @@ export async function exportRelatorioPDF(
   }
 
   // ════════════════════════════════════════════════════════════
-  //  FOOTER — page numbers + bottom line (all pages)
+  //  FOOTER + WATERMARK — all pages
   // ════════════════════════════════════════════════════════════
 
   const pageCount = (
@@ -631,15 +692,17 @@ export async function exportRelatorioPDF(
 
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
-    // Bottom line
-    doc.setDrawColor(...C_BORDER);
-    doc.setLineWidth(0.18);
+
+    // Subtle bottom line
+    doc.setDrawColor(...C_MUTED);
+    doc.setLineWidth(0.1);
     doc.line(M, H - 12, W - M, H - 12);
+
     // Page number
-    doc.setFontSize(8);
-    doc.setTextColor(...C_FOOTER);
-    doc.setFont("helvetica", "normal");
-    doc.text(`Página ${i} de ${pageCount}`, W / 2, H - 8, { align: "center" });
+    doc.setFontSize(7);
+    doc.setTextColor(...C_MUTED);
+    doc.setFont("helvetica", "bold");
+    doc.text(`PÁGINA ${i} DE ${pageCount}`, W / 2, H - 8, { align: "center", charSpace: 0.8 });
   }
 
   // ── Save ──────────────────────────────────────────────────
