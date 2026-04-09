@@ -172,10 +172,12 @@ export async function exportRelatorioPDF(
   const logo1 = fitLogo(11);  // page 1 (32px)
   const logo2 = fitLogo(11);  // pages 2+
 
-  const HEADER_H1 = 18;  // ~50px
-  const HEADER_H2 = 18;
-  const LH_BODY = 5.3;
-  const LOGO_PAD = 3.5;
+  // Layout constants — all spacing derived from SP (16px ≈ 5.6mm)
+  const SP = 5.6;             // 16px uniform section spacing
+  const HEADER_H1 = 19.4;    // 55px — page 1 header
+  const HEADER_H2 = 16;      // pages 2+ header (logo + accent line)
+  const LH_BODY = 5.3;       // 10pt line-height
+  const FOOTER_ZONE = 20;    // reserved bottom for footer (line + page number)
 
   // ── Fill page background ──────────────────────────────────
 
@@ -213,11 +215,11 @@ export async function exportRelatorioPDF(
   const drawPageHeader = () => {
     fillPageBg();
     drawWatermark();
-    doc.setFillColor(...C_BG);
+    doc.setFillColor(...C_CARD);
     doc.rect(0, 0, W, HEADER_H2, "F");
     if (logoData) {
       const ly = (HEADER_H2 - logo2.h) / 2;
-      doc.addImage(logoData.base64, "PNG", W - LOGO_PAD - logo2.w, ly, logo2.w, logo2.h, undefined, "FAST");
+      doc.addImage(logoData.base64, "PNG", W - M - logo2.w, ly, logo2.w, logo2.h, undefined, "FAST");
     }
     drawAccentLine(HEADER_H2);
   };
@@ -225,26 +227,26 @@ export async function exportRelatorioPDF(
   // ── Page break ────────────────────────────────────────────
 
   const pageBreak = (needed: number) => {
-    if (y + needed > H - 18) {
+    if (y + needed > H - FOOTER_ZONE) {
       doc.addPage();
       drawPageHeader();
-      y = HEADER_H2 + 4;
+      y = HEADER_H2 + SP;
     }
   };
 
   // ── Section title — left accent bar ───────────────────────
 
   const sectionTitle = (title: string) => {
-    pageBreak(16);
+    pageBreak(14);
     // Left accent bar 3px
     doc.setFillColor(...C_ACCENT);
-    doc.rect(M, y - 4, 1, 6, "F");
+    doc.rect(M, y - 3.5, 1, 5, "F");
     // Title text
     doc.setFontSize(13);
     doc.setTextColor(...C_TEXT);
     doc.setFont("helvetica", "bold");
     doc.text(title.toUpperCase(), M + 4, y);
-    y += 8;
+    y += SP;
   };
 
   // ── Note below tables ─────────────────────────────────────
@@ -254,12 +256,12 @@ export async function exportRelatorioPDF(
     doc.setTextColor(...C_MUTED);
     doc.setFont("helvetica", "italic");
     doc.text("Recomendação Nord Research.", M, y);
-    y += 6;
+    y += SP;
   };
 
   // ── autoTable shared config ───────────────────────────────
 
-  const tableTopMargin = HEADER_H2 + 4;
+  const tableTopMargin = HEADER_H2 + SP;
   const tableStyles = {
     fontSize: 8,
     cellPadding: 1.6,
@@ -301,7 +303,7 @@ export async function exportRelatorioPDF(
       // Body text
       doc.setFontSize(9);
       doc.setFont("helvetica", "normal");
-      const lines: string[] = doc.splitTextToSize(r.analise_texto, CW - 8);
+      const lines: string[] = doc.splitTextToSize(r.analise_texto, CW - 4);
 
       for (let i = 0; i < lines.length; i++) {
         pageBreak(LH_BODY);
@@ -323,7 +325,7 @@ export async function exportRelatorioPDF(
 
       // Gradient separator between analyses
       if (ai < ativos.length - 1) {
-        y += 3;
+        y += SP / 2;
         const sepSteps = 30;
         const sepW = CW / sepSteps;
         for (let s = 0; s < sepSteps; s++) {
@@ -336,9 +338,9 @@ export async function exportRelatorioPDF(
           doc.setFillColor(r2, g2, b2);
           doc.rect(M + s * sepW, y, sepW + 0.5, 0.3, "F");
         }
-        y += 5;
+        y += SP;
       } else {
-        y += 4;
+        y += SP;
       }
     }
   };
@@ -350,35 +352,35 @@ export async function exportRelatorioPDF(
   fillPageBg();
   drawWatermark();
 
-  // Header bar
-  doc.setFillColor(...C_BG);
+  // Header bar — #0d1b2a full-width, 55px tall
+  doc.setFillColor(...C_CARD);
   doc.rect(0, 0, W, HEADER_H1, "F");
 
-  // Title — 22pt bold white
+  // Title — 22pt bold white, vertically centered in header
   doc.setFontSize(22);
   doc.setTextColor(...C_TEXT);
   doc.setFont("helvetica", "bold");
-  doc.text("Análise de Portfólio", M, 12);
+  doc.text("Análise de Portfólio", M, 9);
 
-  // Metadata line
+  // Metadata line — below title, still inside header
   doc.setFontSize(9);
   doc.setTextColor(...C_SEC);
   doc.setFont("helvetica", "normal");
   doc.text(
     `${formatDateBR(relatorio.created_at)}  ·  ${relatorio.nome_cliente}  ·  ${relatorio.objetivo}  ·  ${relatorio.pct_pl_acoes}% PL  ·  ${fmtCurrency(relatorio.valor_total)}`,
-    M, 17
+    M, 15
   );
 
-  // Logo right-aligned
+  // Logo right-aligned inside header with margin padding
   if (logoData) {
     const ly = (HEADER_H1 - logo1.h) / 2;
-    doc.addImage(logoData.base64, "PNG", W - LOGO_PAD - logo1.w, ly, logo1.w, logo1.h, undefined, "FAST");
+    doc.addImage(logoData.base64, "PNG", W - M - logo1.w, ly, logo1.w, logo1.h, undefined, "FAST");
   }
 
   // Accent gradient line below header
   drawAccentLine(HEADER_H1);
 
-  y = HEADER_H1 + 6;
+  y = HEADER_H1 + SP;
 
   // ════════════════════════════════════════════════════════════
   //  PORTFÓLIO ATUAL
@@ -461,7 +463,7 @@ export async function exportRelatorioPDF(
     },
   });
 
-  y = getLastTableY() + 3;
+  y = getLastTableY() + SP / 2;
   addTableNote();
 
   // ════════════════════════════════════════════════════════════
@@ -546,7 +548,7 @@ export async function exportRelatorioPDF(
     }
   });
 
-  y += totalH + 10;
+  y += totalH + SP;
 
   // ════════════════════════════════════════════════════════════
   //  CONSIDERAÇÕES MOVIMENTAÇÕES
@@ -565,7 +567,7 @@ export async function exportRelatorioPDF(
   //  PORTFÓLIO SUGERIDO
   // ════════════════════════════════════════════════════════════
 
-  pageBreak(30);
+  pageBreak(20);
   sectionTitle("Portfólio Sugerido");
 
   const totalSugerido = ativosSugeridos.reduce((s, a) => s + a.valor_rs, 0);
@@ -628,7 +630,7 @@ export async function exportRelatorioPDF(
     },
   });
 
-  y = getLastTableY() + 3;
+  y = getLastTableY() + SP / 2;
   addTableNote();
 
   // ════════════════════════════════════════════════════════════
@@ -646,8 +648,8 @@ export async function exportRelatorioPDF(
   //  DISCLAIMER CVM
   // ════════════════════════════════════════════════════════════
 
-  pageBreak(28);
-  y += 4;
+  pageBreak(22);
+  y += SP;
 
   // Gradient separator
   const sepSteps = 40;
@@ -662,7 +664,7 @@ export async function exportRelatorioPDF(
     doc.setFillColor(r2, g2, b2);
     doc.rect(M + s * sepW, y, sepW + 0.5, 0.3, "F");
   }
-  y += 4;
+  y += SP / 2;
 
   doc.setFontSize(7);
   doc.setTextColor(...C_MUTED);
