@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession, signOut } from "next-auth/react";
 
 const links = [
   {
@@ -44,6 +45,15 @@ const links = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { data: session } = useSession();
+
+  const userName = session?.user?.name || "Usuário";
+  const initials = userName
+    .split(" ")
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
 
   return (
     <aside className="fixed left-0 top-0 bottom-0 w-[250px] bg-[#0d0e14] border-r border-[#1e2030] flex flex-col z-10">
@@ -81,16 +91,25 @@ export function Sidebar() {
       {/* Separator */}
       <div className="border-t border-[#1e2030] mx-4" />
 
-      {/* Footer */}
+      {/* Footer — user info + logout */}
       <div className="p-4">
         <div className="flex items-center gap-3 px-2">
           <div className="w-8 h-8 rounded-full bg-[#1a1b26] flex items-center justify-center">
-            <span className="text-xs text-[#71717a] font-medium">PM</span>
+            <span className="text-xs text-[#71717a] font-medium">{initials}</span>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs text-[#e4e4e7] font-medium truncate">Portfolio Manager</p>
+            <p className="text-xs text-[#e4e4e7] font-medium truncate">{userName}</p>
             <p className="text-[10px] text-[#71717a]">Family Office</p>
           </div>
+          <button
+            onClick={() => signOut({ callbackUrl: "/login" })}
+            title="Sair"
+            className="text-[#71717a] hover:text-red-400 transition-colors p-1"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />
+            </svg>
+          </button>
         </div>
       </div>
     </aside>
